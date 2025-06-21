@@ -27,22 +27,28 @@ export class TelegramBotService {
 	 * Отправляет сообщение с кнопкой для открытия веб-приложения
 	 */
 	private async sendWebAppButton(chatId: number) {
-		const inlineKeyboard = [
-			[
-				{
-					text: 'Открыть Тир Лист',
-					web_app: { url: config.webApp.url },
-				},
-			],
-		];
+		// Проверяем, что URL соответствует требованиям Telegram (https)
+		let messageText = 'Добро пожаловать!';
+		let markup: any = {};
 
-		await this.bot.sendMessage(
-			chatId,
-			'Добро пожаловать! Нажмите кнопку ниже:',
-			{
-				reply_markup: { inline_keyboard: inlineKeyboard },
-			},
-		);
+		// URL должен начинаться с https:// для работы с Telegram WebApp
+		if (config.webApp.url.startsWith('https://')) {
+			messageText += ' Нажмите кнопку ниже:';
+			const inlineKeyboard = [
+				[
+					{
+						text: 'Открыть Тир Лист',
+						web_app: { url: config.webApp.url },
+					},
+				],
+			];
+			markup = { reply_markup: { inline_keyboard: inlineKeyboard } };
+		} else {
+			// В режиме разработки показываем текстовую ссылку
+			messageText += `\n\nДля открытия приложения перейдите по ссылке: ${config.webApp.url}\n\nВнимание: WebApp кнопки работают только с HTTPS URL`;
+		}
+
+		await this.bot.sendMessage(chatId, messageText, markup);
 	}
 
 	/**
@@ -50,5 +56,22 @@ export class TelegramBotService {
 	 */
 	public getBot(): TelegramBot {
 		return this.bot;
+	}
+
+	/**
+	 * Отправляет изображение в чат с подписью
+	 * @param chatId ID чата
+	 * @param imagePath Путь к файлу изображения
+	 * @param caption Подпись к изображению
+	 */
+	public async sendImage(
+		chatId: number | string,
+		imagePath: string,
+		caption?: string,
+	): Promise<TelegramBot.Message> {
+		return this.bot.sendPhoto(chatId, imagePath, {
+			caption,
+			parse_mode: 'HTML',
+		});
 	}
 }
