@@ -26,6 +26,7 @@ export interface AuthResponse {
 	};
 }
 
+
 // Общий тип ответа API с ошибкой
 export interface ErrorResponse {
 	error: string;

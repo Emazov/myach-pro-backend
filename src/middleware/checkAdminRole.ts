@@ -7,7 +7,7 @@ import { prisma } from '../prisma';
  */
 export const checkAdminRole = async (
 	req: TelegramRequest,
-	res: Response,
+	res: any,
 	next: NextFunction,
 ) => {
 	try {

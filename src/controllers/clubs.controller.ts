@@ -110,3 +110,84 @@ export const getClubById = async (
 		res.status(500).json({ error: 'Ошибка при получении клуба' });
 	}
 };
+
+export const updateClub = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { id } = req.params;
+		const { name, logo } = req.body;
+
+		if (!id) {
+			res.status(400).json({ error: 'ID клуба обязателен' });
+			return;
+		}
+
+		const club = await prisma.club.findUnique({
+			where: {
+				id,
+			},
+			include: {
+				players: true,
+			},
+		});
+
+		if (!club) {
+			res.status(404).json({ error: 'Клуб не найден' });
+			return;
+		}
+
+		const updatedClub = await prisma.club.update({
+			where: { id },
+			data: { name, logo },
+		});
+
+		res.json({
+			ok: true,
+			club: updatedClub,
+		});
+	} catch (err: any) {
+		console.error('Ошибка при обновлении клуба:', err);
+		res.status(500).json({ error: 'Ошибка при обновлении клуба' });
+	}
+};
+
+export const deleteClub = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+) => {
+	try {
+		const { id } = req.params;
+
+		if (!id) {
+			res.status(400).json({ error: 'ID клуба обязателен' });
+			return;
+		}
+
+		const club = await prisma.club.findUnique({
+			where: {
+				id,
+			},
+		});
+
+		if (!club) {
+			res.status(404).json({ error: 'Клуб не найден' });
+			return;
+		}
+
+		await prisma.club.delete({
+			where: { id },
+		});
+
+		res.json({
+			ok: true,
+			message: 'Клуб успешно удален',
+		});
+	} catch (err: any) {
+		console.error('Ошибка при удалении клуба:', err);
+		res.status(500).json({ error: 'Ошибка при удалении клуба' });
+	}
+};
