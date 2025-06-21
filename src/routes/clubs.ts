@@ -4,13 +4,17 @@ import {
 	getAllClubs,
 	getClubById,
 } from '../controllers/clubs.controller';
-import { initDataAuth } from '../middleware/validateInitData';
 import { checkAdminRole } from '../middleware/checkAdminRole';
 
 const router = Router();
 
-router.post('/', initDataAuth, checkAdminRole, createClub);
+// Создание клуба - только для админа
+router.post('/', checkAdminRole, createClub);
+
+// Получение списка всех клубов - доступно авторизованным пользователям
 router.get('/', getAllClubs);
+
+// Получение информации о конкретном клубе - доступно авторизованным пользователям
 router.get('/:id', getClubById);
 
 export default router;

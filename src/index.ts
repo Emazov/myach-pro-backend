@@ -4,9 +4,11 @@ import bodyParser from 'body-parser';
 
 import { config } from './config/env';
 import { TelegramBotService } from './bot/telegramBot';
+
 import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
 import { errorHandler } from './utils/errorHandler';
+import { initDataAuth } from './middleware/validateInitData';
 
 /**
  * Инициализация приложения
@@ -24,8 +26,8 @@ const initApp = () => {
 	);
 
 	// Подключаем маршруты API
-	app.use('/api/auth', authRoutes);
-	app.use('/api/clubs', clubsRoutes);
+	app.use('/api/auth', initDataAuth, authRoutes);
+	app.use('/api/clubs', initDataAuth, clubsRoutes);
 
 	// Подключаем обработчик ошибок
 	app.use(errorHandler);

@@ -10,7 +10,9 @@ export function initDataAuth(req: Request, res: any, next: NextFunction) {
 	const auth = req.header('Authorization') || '';
 
 	if (!auth.startsWith('tma ')) {
-		return res.status(401).json({ error: 'Нет Init Data' });
+		return res
+			.status(401)
+			.json({ error: 'Доступ запрещен. Необходимо авторизоваться' });
 	}
 
 	const initDataRaw = auth.slice(4);

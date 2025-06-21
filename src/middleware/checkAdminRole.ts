@@ -1,19 +1,32 @@
-import { NextFunction } from 'express';
+import { Response, NextFunction } from 'express';
 import { TelegramRequest } from '../types/api';
-import { config } from '../config/env';
+import { prisma } from '../prisma';
 
 /**
- * Middleware для проверки прав администратора
+ * Middleware для проверки прав администратора по роли в базе данных
  */
-export const checkAdminRole = (
+export const checkAdminRole = async (
 	req: TelegramRequest,
-	res: any,
+	res: Response,
 	next: NextFunction,
 ) => {
 	try {
-		const { id } = req.body.telegramUser;
+		const { telegramUser } = req.body;
 
-		if (id !== Number(config.telegram.adminId)) {
+		if (!telegramUser || !telegramUser.id) {
+			return res.status(403).json({
+				error: 'Доступ запрещен. Необходимо авторизоваться',
+			});
+		}
+
+		// Проверяем роль пользователя в БД
+		const user = await prisma.user.findUnique({
+			where: {
+				telegramId: telegramUser.id.toString(),
+			},
+		});
+
+		if (!user || user.role !== 'admin') {
 			return res.status(403).json({
 				error: 'Доступ запрещен. Недостаточно прав',
 			});

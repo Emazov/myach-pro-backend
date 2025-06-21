@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { authUser } from '../controllers/auth.controller';
-import { initDataAuth } from '../middleware/validateInitData';
 
 const router = Router();
 
@@ -9,6 +8,6 @@ const router = Router();
  * @desc    Авторизация через данные Telegram
  * @access  Public
  */
-router.post('/', initDataAuth, authUser);
+router.post('/', authUser);
 
 export default router;
