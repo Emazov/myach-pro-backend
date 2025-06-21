@@ -61,15 +61,17 @@ export const createPlayer = async (req: TelegramRequest, res: Response) => {
 		});
 
 		// Генерируем подписанный URL для аватара
-		const playerResponse: PlayerWithSignedUrl = { ...player };
-		if (player.avatar) {
-			const avatarUrl = await storageService.getSignedUrl(player.avatar);
-			playerResponse.avatarUrl = avatarUrl;
-		}
+		const avatarUrl = player.avatar
+			? await storageService.getSignedUrl(player.avatar)
+			: '';
 
 		res.status(201).json({
 			ok: true,
-			player: playerResponse,
+			player: {
+				id: player.id,
+				name: player.name,
+				avatarUrl,
+			},
 		});
 	} catch (err: any) {
 		console.error('Ошибка при создании игрока:', err);
@@ -98,22 +100,23 @@ export const getAllPlayers = async (
 		});
 
 		// Генерируем подписанные URL для всех аватаров
-		const playersWithUrls: PlayerWithSignedUrl[] = await Promise.all(
+		const formattedPlayers = await Promise.all(
 			players.map(async (player) => {
-				const playerWithUrl: PlayerWithSignedUrl = { ...player };
+				const avatarUrl = player.avatar
+					? await storageService.getSignedUrl(player.avatar)
+					: '';
 
-				if (player.avatar) {
-					const avatarUrl = await storageService.getSignedUrl(player.avatar);
-					playerWithUrl.avatarUrl = avatarUrl;
-				}
-
-				return playerWithUrl;
+				return {
+					id: player.id,
+					name: player.name,
+					avatarUrl,
+				};
 			}),
 		);
 
 		res.json({
 			ok: true,
-			players: playersWithUrls,
+			players: formattedPlayers,
 		});
 	} catch (err: any) {
 		console.error('Ошибка при получении игроков:', err);
@@ -157,15 +160,23 @@ export const getPlayerById = async (
 		}
 
 		// Генерируем подписанный URL для аватара
-		const playerResponse: PlayerWithSignedUrl = { ...player };
-		if (player.avatar) {
-			const avatarUrl = await storageService.getSignedUrl(player.avatar);
-			playerResponse.avatarUrl = avatarUrl;
-		}
+		const avatarUrl = player.avatar
+			? await storageService.getSignedUrl(player.avatar)
+			: '';
 
 		res.json({
 			ok: true,
-			player: playerResponse,
+			player: {
+				id: player.id,
+				name: player.name,
+				avatarUrl,
+				club: player.club
+					? {
+							id: player.club.id,
+							name: player.club.name,
+					  }
+					: null,
+			},
 		});
 	} catch (err: any) {
 		console.error('Ошибка при получении игрока:', err);
@@ -252,15 +263,23 @@ export const updatePlayer = async (
 		});
 
 		// Генерируем подписанный URL для аватара
-		const playerResponse: PlayerWithSignedUrl = { ...updatedPlayer };
-		if (updatedPlayer.avatar) {
-			const avatarUrl = await storageService.getSignedUrl(updatedPlayer.avatar);
-			playerResponse.avatarUrl = avatarUrl;
-		}
+		const avatarUrl = updatedPlayer.avatar
+			? await storageService.getSignedUrl(updatedPlayer.avatar)
+			: '';
 
 		res.json({
 			ok: true,
-			player: playerResponse,
+			player: {
+				id: updatedPlayer.id,
+				name: updatedPlayer.name,
+				avatarUrl,
+				club: updatedPlayer.club
+					? {
+							id: updatedPlayer.club.id,
+							name: updatedPlayer.club.name,
+					  }
+					: null,
+			},
 		});
 	} catch (err: any) {
 		console.error('Ошибка при обновлении игрока:', err);

@@ -49,7 +49,11 @@ export const createClub = async (
 
 			res.status(201).json({
 				ok: true,
-				club,
+				club: {
+					id: club.id,
+					name: club.name,
+					logoUrl: '',
+				},
 			});
 			return;
 		}
@@ -66,15 +70,17 @@ export const createClub = async (
 		});
 
 		// Генерируем подписанный URL для доступа к логотипу
-		const clubResponse: ClubWithSignedUrl = { ...club };
-		if (club.logo) {
-			const logoUrl = await storageService.getSignedUrl(club.logo);
-			clubResponse.logoUrl = logoUrl;
-		}
+		const logoUrl = club.logo
+			? await storageService.getSignedUrl(club.logo)
+			: '';
 
 		res.status(201).json({
 			ok: true,
-			club: clubResponse,
+			club: {
+				id: club.id,
+				name: club.name,
+				logoUrl,
+			},
 		});
 	} catch (err: any) {
 		console.error('Ошибка при создании клуба:', err);
@@ -97,23 +103,41 @@ export const getAllClubs = async (
 			},
 		});
 
-		// Генерируем подписанные URL для всех логотипов
-		const clubsWithUrls: ClubWithSignedUrl[] = await Promise.all(
+		// Генерируем подписанные URL и формируем ответ
+		const formattedClubs = await Promise.all(
 			clubs.map(async (club) => {
-				const clubWithUrl: ClubWithSignedUrl = { ...club };
+				// URL для логотипа
+				const logoUrl = club.logo
+					? await storageService.getSignedUrl(club.logo)
+					: '';
 
-				if (club.logo) {
-					const logoUrl = await storageService.getSignedUrl(club.logo);
-					clubWithUrl.logoUrl = logoUrl;
-				}
+				// Игроки с аватарами
+				const players = await Promise.all(
+					club.players.map(async (player) => {
+						const avatarUrl = player.avatar
+							? await storageService.getSignedUrl(player.avatar)
+							: '';
+						return {
+							id: player.id,
+							name: player.name,
+							avatarUrl,
+						};
+					}),
+				);
 
-				return clubWithUrl;
+				// Финальный формат клуба
+				return {
+					id: club.id,
+					name: club.name,
+					logoUrl,
+					players,
+				};
 			}),
 		);
 
 		res.json({
 			ok: true,
-			clubs: clubsWithUrls,
+			clubs: formattedClubs,
 		});
 	} catch (err: any) {
 		console.error('Ошибка при получении клубов:', err);
@@ -151,34 +175,33 @@ export const getClubById = async (
 			return;
 		}
 
-		// Генерируем подписанный URL для логотипа
-		const clubResponse: ClubWithSignedUrl = { ...club };
-		if (club.logo) {
-			const logoUrl = await storageService.getSignedUrl(club.logo);
-			clubResponse.logoUrl = logoUrl;
-		}
+		// URL для логотипа
+		const logoUrl = club.logo
+			? await storageService.getSignedUrl(club.logo)
+			: '';
 
-		// Генерируем подписанные URL для аватаров игроков
-		if (club.players && club.players.length > 0) {
-			const playersWithUrls: PlayerWithSignedUrl[] = await Promise.all(
-				club.players.map(async (player) => {
-					const playerWithUrl: PlayerWithSignedUrl = { ...player };
-
-					if (player.avatar) {
-						const avatarUrl = await storageService.getSignedUrl(player.avatar);
-						playerWithUrl.avatarUrl = avatarUrl;
-					}
-
-					return playerWithUrl;
-				}),
-			);
-
-			clubResponse.players = playersWithUrls;
-		}
+		// Игроки с аватарами
+		const players = await Promise.all(
+			club.players.map(async (player) => {
+				const avatarUrl = player.avatar
+					? await storageService.getSignedUrl(player.avatar)
+					: '';
+				return {
+					id: player.id,
+					name: player.name,
+					avatarUrl,
+				};
+			}),
+		);
 
 		res.json({
 			ok: true,
-			club: clubResponse,
+			club: {
+				id: club.id,
+				name: club.name,
+				logoUrl,
+				players,
+			},
 		});
 	} catch (err: any) {
 		console.error('Ошибка при получении клуба:', err);
@@ -243,18 +266,38 @@ export const updateClub = async (
 				name: name || club.name,
 				logo: logoKey,
 			},
+			include: {
+				players: true,
+			},
 		});
 
-		// Генерируем подписанный URL для логотипа
-		const clubResponse: ClubWithSignedUrl = { ...updatedClub };
-		if (updatedClub.logo) {
-			const logoUrl = await storageService.getSignedUrl(updatedClub.logo);
-			clubResponse.logoUrl = logoUrl;
-		}
+		// URL для логотипа
+		const logoUrl = updatedClub.logo
+			? await storageService.getSignedUrl(updatedClub.logo)
+			: '';
+
+		// Игроки с аватарами
+		const players = await Promise.all(
+			updatedClub.players.map(async (player) => {
+				const avatarUrl = player.avatar
+					? await storageService.getSignedUrl(player.avatar)
+					: '';
+				return {
+					id: player.id,
+					name: player.name,
+					avatarUrl,
+				};
+			}),
+		);
 
 		res.json({
 			ok: true,
-			club: clubResponse,
+			club: {
+				id: updatedClub.id,
+				name: updatedClub.name,
+				logoUrl,
+				players,
+			},
 		});
 	} catch (err: any) {
 		console.error('Ошибка при обновлении клуба:', err);
