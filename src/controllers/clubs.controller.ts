@@ -17,7 +17,7 @@ export const createClub = async (
 	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const { name } = req.body;
 		const file = req.file;
@@ -95,7 +95,7 @@ export const getAllClubs = async (
 	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const clubs = await prisma.club.findMany({});
 
@@ -133,7 +133,7 @@ export const getClubById = async (
 	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const { id } = req.params;
 
@@ -197,7 +197,7 @@ export const updateClub = async (
 	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const { id } = req.params;
 		const { name } = req.body;
@@ -275,7 +275,7 @@ export const deleteClub = async (
 	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const { id } = req.params;
 

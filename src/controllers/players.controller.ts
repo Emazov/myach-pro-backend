@@ -9,7 +9,11 @@ const storageService = new StorageService();
 /**
  * Создание нового игрока
  */
-export const createPlayer = async (req: TelegramRequest, res: Response) => {
+export const createPlayer = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+): Promise<void> => {
 	try {
 		const { name, clubId } = req.body;
 		const file = req.file;
@@ -86,7 +90,7 @@ export const getAllPlayers = async (
 	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const players = await prisma.players.findMany({
 			include: {
@@ -131,7 +135,7 @@ export const getPlayerById = async (
 	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const { id } = req.params;
 
@@ -191,7 +195,7 @@ export const updatePlayer = async (
 	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const { id } = req.params;
 		const { name, clubId } = req.body;
@@ -294,7 +298,7 @@ export const deletePlayer = async (
 	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const { id } = req.params;
 

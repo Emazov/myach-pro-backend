@@ -7,16 +7,17 @@ import { prisma } from '../prisma';
  */
 export const checkAdminRole = async (
 	req: TelegramRequest,
-	res: any,
+	res: Response,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const { telegramUser } = req.body;
 
 		if (!telegramUser || !telegramUser.id) {
-			return res.status(403).json({
+			res.status(403).json({
 				error: 'Доступ запрещен. Необходимо авторизоваться',
 			});
+			return;
 		}
 
 		// Проверяем роль пользователя в БД
@@ -27,9 +28,10 @@ export const checkAdminRole = async (
 		});
 
 		if (!user || user.role !== 'admin') {
-			return res.status(403).json({
+			res.status(403).json({
 				error: 'Доступ запрещен. Недостаточно прав',
 			});
+			return;
 		}
 
 		next();

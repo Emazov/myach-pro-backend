@@ -10,7 +10,7 @@ export const authUser = async (
 	req: TelegramRequest,
 	res: Response<AuthResponse | { error: string }>,
 	next: NextFunction,
-) => {
+): Promise<void> => {
 	try {
 		const { telegramUser } = req.body;
 

@@ -6,7 +6,11 @@ import { config } from '../config/env';
 /**
  * Middleware для аутентификации через init data Telegram Mini App
  */
-export function initDataAuth(req: Request, res: Response, next: NextFunction) {
+export function initDataAuth(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+): void {
 	try {
 		const auth = req.header('Authorization') || '';
 
@@ -16,9 +20,10 @@ export function initDataAuth(req: Request, res: Response, next: NextFunction) {
 			console.error(
 				'Ошибка авторизации: отсутствует или неверный заголовок Authorization',
 			);
-			return res
+			res
 				.status(401)
 				.json({ error: 'Доступ запрещен. Необходимо авторизоваться' });
+			return;
 		}
 
 		const initDataRaw = auth.slice(4);
@@ -38,9 +43,8 @@ export function initDataAuth(req: Request, res: Response, next: NextFunction) {
 			console.error(
 				'Ошибка авторизации: некорректные данные пользователя в initData',
 			);
-			return res
-				.status(400)
-				.json({ error: 'Некорректные данные пользователя' });
+			res.status(400).json({ error: 'Некорректные данные пользователя' });
+			return;
 		}
 
 		// Добавляем данные пользователя и initData в request
@@ -51,6 +55,6 @@ export function initDataAuth(req: Request, res: Response, next: NextFunction) {
 		next();
 	} catch (e: any) {
 		console.error('Ошибка обработки initData:', e);
-		return res.status(403).json({ error: e.message || 'Ошибка авторизации' });
+		res.status(403).json({ error: e.message || 'Ошибка авторизации' });
 	}
 }
