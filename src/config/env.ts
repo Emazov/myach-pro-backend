@@ -25,10 +25,7 @@ export const config = {
 		url: getEnvVar('WEB_APP_URL'),
 	},
 	cors: {
-		origins: [
-			'https://telegram-test-bot-murex.vercel.app',
-			'https://myach-pro.vercel.app',
-		],
+		origins: ['https://myach-pro.vercel.app'],
 	},
 	r2: {
 		accessKey: getEnvVar('R2_ACCESS_KEY'),
