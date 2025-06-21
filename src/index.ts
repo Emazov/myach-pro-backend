@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+import fs from 'fs';
+import path from 'path';
 
 import { config } from './config/env';
 import { TelegramBotService } from './bot/telegramBot';
@@ -9,11 +11,21 @@ import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
 import playersRoutes from './routes/players';
 import { errorHandler } from './utils/errorHandler';
-import { initDataAuth } from './middleware/validateInitData';
 
+/**
+ * Инициализация приложения
+ */
 const initApp = () => {
+	// Создаем экземпляр Express
 	const app = express();
 
+	// Создаем директорию для временных файлов, если её нет
+	const tmpDir = path.join(process.cwd(), 'tmp/uploads');
+	if (!fs.existsSync(tmpDir)) {
+		fs.mkdirSync(tmpDir, { recursive: true });
+	}
+
+	// Настраиваем middleware
 	app.use(bodyParser.json());
 	app.use(
 		cors({
@@ -21,14 +33,18 @@ const initApp = () => {
 		}),
 	);
 
-	app.use('/api/auth', initDataAuth, authRoutes);
-	app.use('/api/clubs', initDataAuth, clubsRoutes);
-	app.use('/api/players', initDataAuth, playersRoutes);
+	// Подключаем маршруты API
+	app.use('/api/auth', authRoutes);
+	app.use('/api/clubs', clubsRoutes);
+	app.use('/api/players', playersRoutes);
 
+	// Подключаем обработчик ошибок
 	app.use(errorHandler);
 
+	// Инициализируем бота
 	const botService = new TelegramBotService();
 
+	// Запускаем сервер
 	app.listen(config.port, () => {
 		console.log(`Сервер запущен на порту ${config.port}`);
 	});
@@ -39,6 +55,9 @@ const initApp = () => {
 	};
 };
 
+/**
+ * Запуск приложения
+ */
 try {
 	initApp();
 } catch (error) {

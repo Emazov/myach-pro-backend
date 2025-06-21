@@ -30,4 +30,10 @@ export const config = {
 			'https://myach-pro.vercel.app',
 		],
 	},
+	r2: {
+		accessKey: getEnvVar('R2_ACCESS_KEY'),
+		secretKey: getEnvVar('R2_SECRET_KEY'),
+		bucketName: getEnvVar('R2_BUCKET_NAME'),
+		endpoint: getEnvVar('R2_ENDPOINT'),
+	},
 };

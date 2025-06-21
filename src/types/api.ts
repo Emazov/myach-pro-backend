@@ -26,8 +26,39 @@ export interface AuthResponse {
 	};
 }
 
-
 // Общий тип ответа API с ошибкой
 export interface ErrorResponse {
 	error: string;
+}
+
+// Базовые типы для работы с данными
+export interface Club {
+	id: string;
+	name: string;
+	logo: string;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+export interface Player {
+	id: string;
+	name: string;
+	avatar: string;
+	clubId: string;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+// Расширенные типы для работы с подписанными URL
+export interface ClubWithSignedUrl extends Club {
+	logoUrl?: string;
+	players?: PlayerWithSignedUrl[];
+}
+
+export interface PlayerWithSignedUrl extends Player {
+	avatarUrl?: string;
+	club?: {
+		id: string;
+		name: string;
+	};
 }

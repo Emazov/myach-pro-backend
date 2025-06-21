@@ -1,45 +1,85 @@
 import { Response, NextFunction } from 'express';
-import { TelegramRequest } from '../types/api';
+import { TelegramRequest, PlayerWithSignedUrl } from '../types/api';
 import { prisma } from '../prisma';
+import { StorageService } from '../services/storage.service';
 
+// Создаем экземпляр сервиса для хранилища
+const storageService = new StorageService();
+
+/**
+ * Создание нового игрока
+ */
 export const createPlayer = async (req: TelegramRequest, res: Response) => {
 	try {
-		const { name, avatar, clubId } = req.body;
+		const { name, clubId } = req.body;
+		const file = req.file;
 
-		if (!name || !avatar || !clubId) {
-			res.status(400).json({ error: 'Имя, аватар и клуб обязательны' });
+		if (!name || !clubId) {
+			res.status(400).json({ error: 'Имя и клуб обязательны' });
 			return;
 		}
 
+		// Проверяем существование клуба
+		const club = await prisma.club.findUnique({
+			where: { id: clubId },
+		});
+
+		if (!club) {
+			res.status(400).json({ error: 'Указанный клуб не существует' });
+			return;
+		}
+
+		// Проверяем, существует ли игрок с таким именем
 		const isPlayerExists = await prisma.players.findFirst({
 			where: {
 				name,
-			},
-		});
-
-		if (isPlayerExists) {
-			res.status(400).json({ error: 'Игрок с таким именем уже существует' });
-			return;
-		}
-
-		const player = await prisma.players.create({
-			data: {
-				name,
-				avatar: avatar || '',
 				clubId,
 			},
 		});
 
+		if (isPlayerExists) {
+			res
+				.status(400)
+				.json({ error: 'Игрок с таким именем уже существует в данном клубе' });
+			return;
+		}
+
+		let avatarKey = '';
+
+		// Если был загружен файл, сохраняем его в R2
+		if (file) {
+			avatarKey = await storageService.uploadFile(file, 'players');
+		}
+
+		// Создаем игрока
+		const player = await prisma.players.create({
+			data: {
+				name,
+				avatar: avatarKey,
+				clubId,
+			},
+		});
+
+		// Генерируем подписанный URL для аватара
+		const playerResponse: PlayerWithSignedUrl = { ...player };
+		if (player.avatar) {
+			const avatarUrl = await storageService.getSignedUrl(player.avatar);
+			playerResponse.avatarUrl = avatarUrl;
+		}
+
 		res.status(201).json({
 			ok: true,
-			player,
+			player: playerResponse,
 		});
 	} catch (err: any) {
-		console.error('Ошибка при создании клуба:', err);
-		res.status(500).json({ error: 'Ошибка при создании клуба' });
+		console.error('Ошибка при создании игрока:', err);
+		res.status(500).json({ error: 'Ошибка при создании игрока' });
 	}
 };
 
+/**
+ * Получение списка всех игроков
+ */
 export const getAllPlayers = async (
 	req: TelegramRequest,
 	res: Response,
@@ -47,16 +87,33 @@ export const getAllPlayers = async (
 ) => {
 	try {
 		const players = await prisma.players.findMany({
-			select: {
-				id: true,
-				name: true,
-				avatar: true,
+			include: {
+				club: {
+					select: {
+						id: true,
+						name: true,
+					},
+				},
 			},
 		});
 
+		// Генерируем подписанные URL для всех аватаров
+		const playersWithUrls: PlayerWithSignedUrl[] = await Promise.all(
+			players.map(async (player) => {
+				const playerWithUrl: PlayerWithSignedUrl = { ...player };
+
+				if (player.avatar) {
+					const avatarUrl = await storageService.getSignedUrl(player.avatar);
+					playerWithUrl.avatarUrl = avatarUrl;
+				}
+
+				return playerWithUrl;
+			}),
+		);
+
 		res.json({
 			ok: true,
-			players,
+			players: playersWithUrls,
 		});
 	} catch (err: any) {
 		console.error('Ошибка при получении игроков:', err);
@@ -65,7 +122,7 @@ export const getAllPlayers = async (
 };
 
 /**
- * Получение информации о конкретном клубе по ID
+ * Получение информации о конкретном игроке по ID
  */
 export const getPlayerById = async (
 	req: TelegramRequest,
@@ -84,10 +141,13 @@ export const getPlayerById = async (
 			where: {
 				id,
 			},
-			select: {
-				id: true,
-				name: true,
-				avatar: true,
+			include: {
+				club: {
+					select: {
+						id: true,
+						name: true,
+					},
+				},
 			},
 		});
 
@@ -96,9 +156,16 @@ export const getPlayerById = async (
 			return;
 		}
 
+		// Генерируем подписанный URL для аватара
+		const playerResponse: PlayerWithSignedUrl = { ...player };
+		if (player.avatar) {
+			const avatarUrl = await storageService.getSignedUrl(player.avatar);
+			playerResponse.avatarUrl = avatarUrl;
+		}
+
 		res.json({
-			ok: true,	
-			player,
+			ok: true,
+			player: playerResponse,
 		});
 	} catch (err: any) {
 		console.error('Ошибка при получении игрока:', err);
@@ -106,20 +173,25 @@ export const getPlayerById = async (
 	}
 };
 
+/**
+ * Обновление информации об игроке
+ */
 export const updatePlayer = async (
-	req: TelegramRequest,	
+	req: TelegramRequest,
 	res: Response,
 	next: NextFunction,
 ) => {
 	try {
 		const { id } = req.params;
-		const { name, avatar } = req.body;
+		const { name, clubId } = req.body;
+		const file = req.file;
 
 		if (!id) {
 			res.status(400).json({ error: 'ID игрока обязателен' });
 			return;
 		}
 
+		// Проверяем существование игрока
 		const player = await prisma.players.findUnique({
 			where: {
 				id,
@@ -131,14 +203,64 @@ export const updatePlayer = async (
 			return;
 		}
 
+		// Проверяем существование клуба, если указан
+		if (clubId) {
+			const club = await prisma.club.findUnique({
+				where: { id: clubId },
+			});
+
+			if (!club) {
+				res.status(400).json({ error: 'Указанный клуб не существует' });
+				return;
+			}
+		}
+
+		let avatarKey = player.avatar;
+
+		// Если загружен новый аватар
+		if (file) {
+			// Удаляем старый аватар, если он был
+			if (player.avatar) {
+				try {
+					await storageService.deleteFile(player.avatar);
+				} catch (error) {
+					console.error('Ошибка при удалении старого аватара:', error);
+					// Продолжаем выполнение даже при ошибке удаления
+				}
+			}
+
+			// Загружаем новый аватар
+			avatarKey = await storageService.uploadFile(file, 'players');
+		}
+
+		// Обновляем данные игрока
 		const updatedPlayer = await prisma.players.update({
 			where: { id },
-			data: { name, avatar },
+			data: {
+				name: name || player.name,
+				avatar: avatarKey,
+				clubId: clubId || player.clubId,
+			},
+			include: {
+				club: {
+					select: {
+						id: true,
+						name: true,
+					},
+				},
+			},
 		});
+
+		// Генерируем подписанный URL для аватара
+		const playerResponse: PlayerWithSignedUrl = { ...updatedPlayer };
+		if (updatedPlayer.avatar) {
+			const avatarUrl = await storageService.getSignedUrl(updatedPlayer.avatar);
+			playerResponse.avatarUrl = avatarUrl;
+		}
 
 		res.json({
 			ok: true,
-			player: updatedPlayer,
+			player: playerResponse,
 		});
 	} catch (err: any) {
 		console.error('Ошибка при обновлении игрока:', err);
@@ -146,6 +268,9 @@ export const updatePlayer = async (
 	}
 };
 
+/**
+ * Удаление игрока
+ */
 export const deletePlayer = async (
 	req: TelegramRequest,
 	res: Response,
@@ -159,6 +284,7 @@ export const deletePlayer = async (
 			return;
 		}
 
+		// Проверяем существование игрока
 		const player = await prisma.players.findUnique({
 			where: {
 				id,
@@ -170,6 +296,17 @@ export const deletePlayer = async (
 			return;
 		}
 
+		// Если у игрока был аватар, удаляем его
+		if (player.avatar) {
+			try {
+				await storageService.deleteFile(player.avatar);
+			} catch (error) {
+				console.error('Ошибка при удалении аватара:', error);
+				// Продолжаем выполнение даже при ошибке удаления файла
+			}
+		}
+
+		// Удаляем игрока
 		await prisma.players.delete({
 			where: { id },
 		});
