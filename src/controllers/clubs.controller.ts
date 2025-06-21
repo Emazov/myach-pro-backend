@@ -299,13 +299,29 @@ export const deleteClub = async (
 			return;
 		}
 
-		// Если у клуба есть игроки, запрещаем удаление
+		// Если у клуба есть игроки, удаляем их вместе с аватарами
 		if (club.players.length > 0) {
-			res.status(400).json({
-				error:
-					'Невозможно удалить клуб с игроками. Сначала удалите всех игроков из клуба.',
+			// Удаляем аватары игроков
+			for (const player of club.players) {
+				if (player.avatar) {
+					try {
+						await storageService.deleteFile(player.avatar);
+					} catch (error) {
+						console.error(
+							`Ошибка при удалении аватара игрока ${player.id}:`,
+							error,
+						);
+						// Продолжаем выполнение даже при ошибке удаления файла
+					}
+				}
+			}
+
+			// Удаляем всех игроков клуба
+			await prisma.players.deleteMany({
+				where: {
+					clubId: id,
+				},
 			});
-			return;
 		}
 
 		// Если у клуба был логотип, удаляем файл
@@ -327,7 +343,7 @@ export const deleteClub = async (
 
 		res.json({
 			ok: true,
-			message: 'Клуб успешно удален',
+			message: 'Клуб и его игроки успешно удалены',
 		});
 	} catch (err: any) {
 		console.error('Ошибка при удалении клуба:', err);
