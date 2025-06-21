@@ -114,6 +114,79 @@ export class AdminService {
 	}
 
 	/**
+	 * Ищет пользователей по username
+	 */
+	static async searchUsersByUsername(
+		searchQuery: string,
+		requestedBy: string,
+	): Promise<{ success: boolean; users?: any[]; message: string }> {
+		try {
+			// Проверяем, что запрашивающий является админом
+			const isAdminUser = await this.isAdmin(requestedBy);
+			if (!isAdminUser) {
+				return { success: false, message: 'Недостаточно прав' };
+			}
+
+			// Ищем пользователей по username (частичное совпадение)
+			const users = await prisma.user.findMany({
+				where: {
+					username: {
+						contains: searchQuery,
+						mode: 'insensitive',
+					},
+				},
+				select: {
+					telegramId: true,
+					username: true,
+					role: true,
+				},
+				take: 10, // Ограничиваем количество результатов
+			});
+
+			return { success: true, users, message: 'Поиск выполнен успешно' };
+		} catch (error) {
+			console.error('Ошибка при поиске пользователей:', error);
+			return { success: false, message: 'Ошибка сервера' };
+		}
+	}
+
+	/**
+	 * Добавляет нового админа по username
+	 */
+	static async addAdminByUsername(
+		username: string,
+		addedBy: string,
+	): Promise<{ success: boolean; message: string }> {
+		try {
+			// Проверяем, что добавляющий является админом
+			const isAdminUser = await this.isAdmin(addedBy);
+			if (!isAdminUser) {
+				return { success: false, message: 'Недостаточно прав' };
+			}
+
+			// Ищем пользователя по username
+			const user = await prisma.user.findFirst({
+				where: {
+					username: {
+						equals: username,
+						mode: 'insensitive',
+					},
+				},
+			});
+
+			if (!user) {
+				return { success: false, message: 'Пользователь не найден' };
+			}
+
+			// Используем существующий метод добавления админа
+			return await this.addAdmin(user.telegramId, user.username, addedBy);
+		} catch (error) {
+			console.error('Ошибка при добавлении админа по username:', error);
+			return { success: false, message: 'Ошибка сервера' };
+		}
+	}
+
+	/**
 	 * Получает список всех админов
 	 */
 	static async getAdmins(): Promise<any[]> {
@@ -131,7 +204,7 @@ export class AdminService {
 
 			// Добавляем главного админа из переменной окружения, если его нет в списке
 			const mainAdminExists = admins.some(
-				admin => admin.telegramId === config.telegram.adminId
+				(admin) => admin.telegramId === config.telegram.adminId,
 			);
 
 			if (!mainAdminExists) {
@@ -150,4 +223,4 @@ export class AdminService {
 			return [];
 		}
 	}
-} 
+}

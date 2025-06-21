@@ -5,6 +5,8 @@ import {
 	getAdmins,
 	addAdmin,
 	removeAdmin,
+	searchUsers,
+	addAdminByUsername,
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -21,5 +23,11 @@ router.post('/admins', addAdmin);
 
 // DELETE /api/admin/admins/:telegramId - удалить админа
 router.delete('/admins/:telegramId', removeAdmin);
+
+// GET /api/admin/search-users - поиск пользователей по username
+router.get('/search-users', searchUsers);
+
+// POST /api/admin/admins/by-username - добавить админа по username
+router.post('/admins/by-username', addAdminByUsername);
 
 export default router;
