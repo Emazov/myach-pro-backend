@@ -56,8 +56,17 @@ export const getAllClubs = async (
 ) => {
 	try {
 		const clubs = await prisma.club.findMany({
-			include: {
-				players: true,
+			select: {
+				id: true,
+				name: true,
+				logo: true,
+				players: {
+					select: {
+						id: true,
+						name: true,
+						avatar: true,
+					},
+				},
 			},
 		});
 
@@ -91,8 +100,17 @@ export const getClubById = async (
 			where: {
 				id,
 			},
-			include: {
-				players: true,
+			select: {
+				id: true,
+				name: true,
+				logo: true,
+				players: {
+					select: {
+						id: true,
+						name: true,
+						avatar: true,
+					},
+				},
 			},
 		});
 
