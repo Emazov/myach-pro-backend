@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import { TelegramRequest, AuthResponse } from '../types/api';
 import { config } from '../config/env';
 import { prisma } from '../prisma';
+import { AdminService } from '../services/admin.service';
 
 /**
  * Контроллер для авторизации пользователя через Telegram
@@ -19,38 +20,44 @@ export const authUser = async (
 			return;
 		}
 
-		// Определяем роль пользователя (админ или обычный пользователь)
-		const role =
-			telegramUser.id === Number(config.telegram.adminId) ? 'admin' : 'user';
+		const telegramId = telegramUser.id.toString();
 
-		const isUserExists = await prisma.user.findUnique({
-			where: {
-				telegramId: telegramUser.id.toString(),
-			},
+		// Проверяем, является ли пользователь админом
+		const isAdmin = await AdminService.isAdmin(telegramId);
+		const role = isAdmin ? 'admin' : 'user';
+
+		const existingUser = await prisma.user.findUnique({
+			where: { telegramId },
 		});
 
 		let user;
 
-		if (!isUserExists) {
+		if (!existingUser) {
 			// Создаем нового пользователя
 			user = await prisma.user.create({
 				data: {
-					telegramId: telegramUser.id.toString(),
+					telegramId,
 					username: telegramUser.username || null,
 					role,
 				},
 			});
 		} else {
-			// Обновляем данные существующего пользователя
-			user = await prisma.user.update({
-				where: {
-					telegramId: telegramUser.id.toString(),
-				},
-				data: {
-					username: telegramUser.username || isUserExists.username,
-					role, // обновляем роль на случай, если статус пользователя изменился
-				},
-			});
+			// Обновляем только username и роль, если роль изменилась
+			const needsUpdate =
+				existingUser.username !== (telegramUser.username || null) ||
+				existingUser.role !== role;
+
+			if (needsUpdate) {
+				user = await prisma.user.update({
+					where: { telegramId },
+					data: {
+						username: telegramUser.username || existingUser.username,
+						role,
+					},
+				});
+			} else {
+				user = existingUser;
+			}
 		}
 
 		res.json({

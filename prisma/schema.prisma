@@ -25,6 +25,18 @@ model User {
     @@map("users")
 }
 
+model AdminUser {
+    id         String  @id @default(uuid())
+    telegramId String  @unique @map("telegram_id")
+    username   String?
+    addedBy    String? @map("added_by") // ID админа, который добавил этого админа
+
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    @@map("admin_users")
+}
+
 model Club {
     id   String @id @default(uuid())
     name String

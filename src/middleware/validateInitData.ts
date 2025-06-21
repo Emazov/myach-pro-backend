@@ -58,3 +58,52 @@ export function initDataAuth(
 		res.status(403).json({ error: e.message || 'Ошибка авторизации' });
 	}
 }
+
+/**
+ * Middleware для валидации initData из body или query параметров
+ */
+export function validateInitData(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+): void {
+	try {
+		// Получаем initData из body или query параметров
+		const initDataRaw = req.body?.initData || req.query?.initData as string;
+
+		if (!initDataRaw) {
+			console.error('Ошибка авторизации: отсутствует initData');
+			res.status(401).json({ error: 'Доступ запрещен. Необходимо авторизоваться' });
+			return;
+		}
+
+		// Инициализируем body, если он не определен
+		if (!req.body) {
+			req.body = {};
+		}
+
+		// Валидируем данные от Telegram
+		validate(initDataRaw, config.telegram.botToken);
+
+		// Парсим данные
+		const initData = parseInitData(initDataRaw);
+
+		if (!initData || !initData.user) {
+			console.error(
+				'Ошибка авторизации: некорректные данные пользователя в initData',
+			);
+			res.status(400).json({ error: 'Некорректные данные пользователя' });
+			return;
+		}
+
+		// Добавляем данные пользователя и initData в request
+		req.body.telegramUser = initData.user;
+		req.body.initData = initData;
+
+		console.log('Успешная авторизация пользователя:', initData.user.id);
+		next();
+	} catch (e: any) {
+		console.error('Ошибка обработки initData:', e);
+		res.status(403).json({ error: e.message || 'Ошибка авторизации' });
+	}
+}
