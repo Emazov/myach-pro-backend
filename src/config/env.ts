@@ -25,10 +25,7 @@ export const config = {
 		url: getEnvVar('WEB_APP_URL'),
 	},
 	cors: {
-		origins: [
-			'https://myach-pro-frontend.vercel.app/',
-			'http://localhost:5173',
-		],
+		origins: ['https://myach-pro-frontend.vercel.app', 'http://localhost:5173'],
 	},
 	r2: {
 		accessKey: getEnvVar('R2_ACCESS_KEY'),
