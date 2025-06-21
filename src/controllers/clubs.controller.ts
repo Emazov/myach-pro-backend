@@ -97,11 +97,7 @@ export const getAllClubs = async (
 	next: NextFunction,
 ) => {
 	try {
-		const clubs = await prisma.club.findMany({
-			include: {
-				players: true,
-			},
-		});
+		const clubs = await prisma.club.findMany({});
 
 		// Генерируем подписанные URL и формируем ответ
 		const formattedClubs = await Promise.all(
@@ -111,26 +107,11 @@ export const getAllClubs = async (
 					? await storageService.getSignedUrl(club.logo)
 					: '';
 
-				// Игроки с аватарами
-				const players = await Promise.all(
-					club.players.map(async (player) => {
-						const avatarUrl = player.avatar
-							? await storageService.getSignedUrl(player.avatar)
-							: '';
-						return {
-							id: player.id,
-							name: player.name,
-							avatarUrl,
-						};
-					}),
-				);
-
 				// Финальный формат клуба
 				return {
 					id: club.id,
 					name: club.name,
 					logoUrl,
-					players,
 				};
 			}),
 		);
@@ -266,9 +247,6 @@ export const updateClub = async (
 				name: name || club.name,
 				logo: logoKey,
 			},
-			include: {
-				players: true,
-			},
 		});
 
 		// URL для логотипа
@@ -276,27 +254,12 @@ export const updateClub = async (
 			? await storageService.getSignedUrl(updatedClub.logo)
 			: '';
 
-		// Игроки с аватарами
-		const players = await Promise.all(
-			updatedClub.players.map(async (player) => {
-				const avatarUrl = player.avatar
-					? await storageService.getSignedUrl(player.avatar)
-					: '';
-				return {
-					id: player.id,
-					name: player.name,
-					avatarUrl,
-				};
-			}),
-		);
-
 		res.json({
 			ok: true,
 			club: {
 				id: updatedClub.id,
 				name: updatedClub.name,
 				logoUrl,
-				players,
 			},
 		});
 	} catch (err: any) {
