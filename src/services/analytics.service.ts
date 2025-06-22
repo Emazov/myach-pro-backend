@@ -1,4 +1,5 @@
 import { prisma } from '../prisma';
+import { convertBigIntToNumber } from '../utils/bigintUtils';
 
 export enum EventType {
 	APP_START = 'app_start',
@@ -167,7 +168,8 @@ export class AnalyticsService {
 				},
 			});
 
-			return {
+			// Преобразуем все BigInt значения в Number
+			const result = {
 				totalUsers,
 				totalAppStarts,
 				totalGameCompletions,
@@ -178,6 +180,8 @@ export class AnalyticsService {
 					gameCompletionsToday,
 				},
 			};
+
+			return convertBigIntToNumber(result);
 		} catch (error) {
 			console.error('Ошибка при получении статистики:', error);
 			throw new Error('Ошибка при получении статистики');
@@ -194,7 +198,7 @@ export class AnalyticsService {
 			startDate.setDate(startDate.getDate() - days);
 
 			// Статистика по дням
-			const dailyStats = await prisma.$queryRaw`
+			const dailyStatsRaw = await prisma.$queryRaw`
 				SELECT 
 					DATE(created_at) as date,
 					COUNT(CASE WHEN event_type = 'app_start' THEN 1 END) as app_starts,
@@ -205,8 +209,11 @@ export class AnalyticsService {
 				ORDER BY date DESC
 			`;
 
+			// Преобразуем BigInt в Number
+			const dailyStats = convertBigIntToNumber(dailyStatsRaw);
+
 			// Топ клубов по количеству игр
-			const topClubs = await prisma.gameSession.groupBy({
+			const topClubsRaw = await prisma.gameSession.groupBy({
 				by: ['clubId'],
 				where: {
 					isCompleted: true,
@@ -226,8 +233,11 @@ export class AnalyticsService {
 				take: 5,
 			});
 
+			// Преобразуем BigInt в Number для топ клубов
+			const topClubs = convertBigIntToNumber(topClubsRaw);
+
 			// Получаем названия клубов
-			const clubIds = topClubs.map((club) => club.clubId).filter(Boolean);
+			const clubIds = topClubs.map((club: any) => club.clubId).filter(Boolean);
 			const clubs = await prisma.club.findMany({
 				where: {
 					id: {
@@ -240,8 +250,8 @@ export class AnalyticsService {
 				},
 			});
 
-			const topClubsWithNames = topClubs.map((stat) => ({
-				...stat,
+			const topClubsWithNames = topClubs.map((stat: any) => ({
+				clubId: stat.clubId,
 				clubName:
 					clubs.find((club) => club.id === stat.clubId)?.name ||
 					'Неизвестный клуб',

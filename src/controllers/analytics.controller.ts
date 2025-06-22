@@ -139,7 +139,10 @@ export const getDetailedStats = async (
 		const { days } = req.query;
 		const daysNumber = days ? parseInt(days as string) : 7;
 
+		console.log('Запрос детальной статистики на', daysNumber, 'дней');
 		const stats = await AnalyticsService.getDetailedStats(daysNumber);
+		console.log('Статистика получена успешно, отправляем ответ');
+
 		res.json({ ok: true, stats });
 	} catch (error) {
 		console.error('Ошибка при получении детальной статистики:', error);
