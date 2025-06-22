@@ -11,10 +11,10 @@ import {
 
 const router = Router();
 
-// Публичные маршруты (для всех пользователей) - используют validateInitData для POST запросов
-router.post('/event', validateInitData, logEvent);
-router.post('/game/start', validateInitData, startGameSession);
-router.post('/game/complete', validateInitData, completeGameSession);
+// Публичные маршруты (для всех пользователей) - используют initDataAuth для чтения из заголовка Authorization
+router.post('/event', initDataAuth, logEvent);
+router.post('/game/start', initDataAuth, startGameSession);
+router.post('/game/complete', initDataAuth, completeGameSession);
 
 // Приватные маршруты (только для админов) - используют initDataAuth для GET запросов
 router.get('/stats', initDataAuth, checkAdminRole, getStats);
