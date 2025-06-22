@@ -13,7 +13,10 @@ export const checkAdminRole = async (
 	try {
 		const { telegramUser } = req.body;
 
+		console.log('checkAdminRole - telegramUser:', telegramUser);
+
 		if (!telegramUser || !telegramUser.id) {
+			console.error('checkAdminRole - пользователь не найден в req.body');
 			res.status(403).json({
 				error: 'Доступ запрещен. Необходимо авторизоваться',
 			});
@@ -27,7 +30,10 @@ export const checkAdminRole = async (
 			},
 		});
 
+		console.log('checkAdminRole - найден пользователь:', user);
+
 		if (!user || user.role !== 'admin') {
+			console.error('checkAdminRole - пользователь не админ или не найден');
 			res.status(403).json({
 				error: 'Доступ запрещен. Недостаточно прав',
 			});

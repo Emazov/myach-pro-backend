@@ -15,6 +15,8 @@ export function initDataAuth(
 		const auth = req.header('Authorization') || '';
 
 		console.log('Authorization header:', auth ? 'Присутствует' : 'Отсутствует');
+		console.log('Request URL:', req.url);
+		console.log('Request method:', req.method);
 
 		if (!auth || !auth.startsWith('tma ')) {
 			console.error(
@@ -69,11 +71,13 @@ export function validateInitData(
 ): void {
 	try {
 		// Получаем initData из body или query параметров
-		const initDataRaw = req.body?.initData || req.query?.initData as string;
+		const initDataRaw = req.body?.initData || (req.query?.initData as string);
 
 		if (!initDataRaw) {
 			console.error('Ошибка авторизации: отсутствует initData');
-			res.status(401).json({ error: 'Доступ запрещен. Необходимо авторизоваться' });
+			res
+				.status(401)
+				.json({ error: 'Доступ запрещен. Необходимо авторизоваться' });
 			return;
 		}
 
