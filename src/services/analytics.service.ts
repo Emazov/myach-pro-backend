@@ -206,10 +206,10 @@ export class AnalyticsService {
 				FROM user_events 
 				WHERE created_at >= ${startDate} AND created_at <= ${endDate}
 				GROUP BY DATE(created_at)
-				ORDER BY date DESC
+				ORDER BY DATE(created_at) DESC
 			`;
 
-			// Преобразуем BigInt в Number
+			// Преобразуем BigInt в Number и обрабатываем даты
 			const dailyStats = convertBigIntToNumber(dailyStatsRaw);
 
 			// Топ клубов по количеству игр

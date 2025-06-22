@@ -141,6 +141,7 @@ export const getDetailedStats = async (
 
 		console.log('Запрос детальной статистики на', daysNumber, 'дней');
 		const stats = await AnalyticsService.getDetailedStats(daysNumber);
+		console.log('Полученная статистика:', JSON.stringify(stats, null, 2));
 		console.log('Статистика получена успешно, отправляем ответ');
 
 		res.json({ ok: true, stats });

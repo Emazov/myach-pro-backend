@@ -10,6 +10,11 @@ export function convertBigIntToNumber(obj: any): any {
 		return Number(obj);
 	}
 
+	// Обрабатываем Date объекты
+	if (obj instanceof Date) {
+		return obj.toISOString().split('T')[0]; // Возвращаем YYYY-MM-DD формат
+	}
+
 	if (Array.isArray(obj)) {
 		return obj.map(convertBigIntToNumber);
 	}
