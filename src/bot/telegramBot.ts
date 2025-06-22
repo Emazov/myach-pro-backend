@@ -57,21 +57,4 @@ export class TelegramBotService {
 	public getBot(): TelegramBot {
 		return this.bot;
 	}
-
-	/**
-	 * Отправляет изображение в чат с подписью
-	 * @param chatId ID чата
-	 * @param imagePath Путь к файлу изображения
-	 * @param caption Подпись к изображению
-	 */
-	public async sendImage(
-		chatId: number | string,
-		imagePath: string,
-		caption?: string,
-	): Promise<TelegramBot.Message> {
-		return this.bot.sendPhoto(chatId, imagePath, {
-			caption,
-			parse_mode: 'HTML',
-		});
-	}
 }

@@ -11,7 +11,6 @@ import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
 import playersRoutes from './routes/players';
 import adminRoutes from './routes/admin';
-import botRoutes from './routes/bot';
 import { errorHandler } from './utils/errorHandler';
 
 /**
@@ -40,7 +39,6 @@ const initApp = () => {
 	app.use('/api/clubs', clubsRoutes);
 	app.use('/api/players', playersRoutes);
 	app.use('/api/admin', adminRoutes);
-	app.use('/api/bot', botRoutes);
 
 	// Подключаем обработчик ошибок
 	app.use(errorHandler);
