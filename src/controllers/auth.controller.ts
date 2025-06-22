@@ -3,7 +3,6 @@ import { TelegramRequest, AuthResponse } from '../types/api';
 import { config } from '../config/env';
 import { prisma } from '../prisma';
 import { AdminService } from '../services/admin.service';
-import { AnalyticsService, EventType } from '../services/analytics.service';
 
 /**
  * Контроллер для авторизации пользователя через Telegram
@@ -60,11 +59,6 @@ export const authUser = async (
 				user = existingUser;
 			}
 		}
-
-		// Логируем событие запуска приложения
-		AnalyticsService.logEvent(telegramId, EventType.APP_START).catch((err) => {
-			console.error('Ошибка при логировании события APP_START:', err);
-		});
 
 		res.json({
 			ok: true,

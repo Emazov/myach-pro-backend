@@ -62,6 +62,11 @@ export const startGameSession = async (
 			clubId,
 		);
 
+		// Логируем событие запуска приложения (только при начале игры)
+		await AnalyticsService.logEvent(telegramId, EventType.APP_START, {
+			clubId,
+		});
+
 		// Логируем событие начала игры
 		await AnalyticsService.logEvent(telegramId, EventType.GAME_START, {
 			clubId,

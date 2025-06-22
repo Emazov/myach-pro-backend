@@ -21,7 +21,7 @@ export interface AnalyticsStats {
 
 export class AnalyticsService {
 	/**
-	 * Логирует событие пользователя
+	 * Логирует событие пользователя (исключая админов)
 	 */
 	static async logEvent(
 		telegramId: string,
@@ -29,6 +29,19 @@ export class AnalyticsService {
 		metadata?: any,
 	): Promise<void> {
 		try {
+			// Проверяем роль пользователя - не логируем события от админов
+			const user = await prisma.user.findUnique({
+				where: { telegramId },
+				select: { role: true },
+			});
+
+			if (user?.role === 'admin') {
+				console.log(
+					`Пропускаем логирование события ${eventType} для админа ${telegramId}`,
+				);
+				return;
+			}
+
 			await prisma.userEvent.create({
 				data: {
 					telegramId,
