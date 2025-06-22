@@ -63,3 +63,29 @@ model Players {
 
     @@map("players")
 }
+
+model UserEvent {
+    id         String   @id @default(uuid())
+    telegramId String   @map("telegram_id")
+    eventType  String   @map("event_type") // 'app_start', 'game_start', 'game_completed'
+    metadata   Json? // дополнительные данные (например, clubId для игры)
+    createdAt  DateTime @default(now()) @map("created_at")
+
+    @@index([telegramId])
+    @@index([eventType])
+    @@index([createdAt])
+    @@map("user_events")
+}
+
+model GameSession {
+    id          String    @id @default(uuid())
+    telegramId  String    @map("telegram_id")
+    clubId      String?   @map("club_id")
+    startedAt   DateTime  @default(now()) @map("started_at")
+    completedAt DateTime? @map("completed_at")
+    isCompleted Boolean   @default(false) @map("is_completed")
+
+    @@index([telegramId])
+    @@index([isCompleted])
+    @@map("game_sessions")
+}
