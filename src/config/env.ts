@@ -32,5 +32,6 @@ export const config = {
 		secretKey: getEnvVar('R2_SECRET_KEY'),
 		bucketName: getEnvVar('R2_BUCKET_NAME'),
 		endpoint: getEnvVar('R2_ENDPOINT'),
+		publicDomain: getEnvVar('R2_PUBLIC_DOMAIN', ''),
 	},
 };

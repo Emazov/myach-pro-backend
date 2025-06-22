@@ -12,6 +12,7 @@ import clubsRoutes from './routes/clubs';
 import playersRoutes from './routes/players';
 import adminRoutes from './routes/admin';
 import analyticsRoutes from './routes/analytics';
+import uploadRoutes from './routes/upload';
 import { errorHandler } from './utils/errorHandler';
 
 /**
@@ -41,6 +42,7 @@ const initApp = () => {
 	app.use('/api/players', playersRoutes);
 	app.use('/api/admin', adminRoutes);
 	app.use('/api/analytics', analyticsRoutes);
+	app.use('/api/upload', uploadRoutes);
 
 	// Подключаем обработчик ошибок
 	app.use(errorHandler);
