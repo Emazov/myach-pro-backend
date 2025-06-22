@@ -324,6 +324,17 @@ export const deleteClub = async (
 			});
 		}
 
+		// Обнуляем clubId в игровых сессиях, связанных с удаляемым клубом
+		// Это предотвращает отображение "Неизвестный клуб" в аналитике
+		await prisma.gameSession.updateMany({
+			where: {
+				clubId: id,
+			},
+			data: {
+				clubId: null,
+			},
+		});
+
 		// Если у клуба был логотип, удаляем файл
 		if (club.logo) {
 			try {

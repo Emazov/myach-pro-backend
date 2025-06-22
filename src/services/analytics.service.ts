@@ -230,6 +230,9 @@ export class AnalyticsService {
 				by: ['clubId'],
 				where: {
 					isCompleted: true,
+					clubId: {
+						not: null, // Исключаем сессии с удаленными клубами
+					},
 					completedAt: {
 						gte: startDate,
 						lte: endDate,
