@@ -9,12 +9,12 @@ export enum EventType {
 
 export interface AnalyticsStats {
 	totalUsers: number;
-	totalAppStarts: number;
+	totalAppStarts: number; // Общее количество запусков игр (GAME_START)
 	totalGameCompletions: number;
 	conversionRate: number;
 	recentStats: {
 		usersToday: number;
-		appStartsToday: number;
+		appStartsToday: number; // Запуски игр за сегодня (GAME_START)
 		gameCompletionsToday: number;
 	};
 }
@@ -288,10 +288,10 @@ export class AnalyticsService {
 				where: { role: 'user' },
 			});
 
-			// Общее количество запусков приложения (от обычных пользователей)
+			// Общее количество запусков игр (от обычных пользователей)
 			const totalAppStarts = await prisma.userEvent.count({
 				where: {
-					eventType: EventType.APP_START,
+					eventType: EventType.GAME_START,
 					// Исключаем админов через join с таблицей users
 					User: {
 						role: 'user',
@@ -332,7 +332,7 @@ export class AnalyticsService {
 
 			const appStartsToday = await prisma.userEvent.count({
 				where: {
-					eventType: EventType.APP_START,
+					eventType: EventType.GAME_START,
 					User: {
 						role: 'user',
 					},
@@ -389,7 +389,7 @@ export class AnalyticsService {
 			const dailyStatsRaw = await prisma.$queryRaw`
 				SELECT 
 					DATE(ue.created_at) as date,
-					COUNT(CASE WHEN ue.event_type = 'app_start' THEN 1 END) as app_starts,
+					COUNT(CASE WHEN ue.event_type = 'game_start' THEN 1 END) as app_starts,
 					COUNT(CASE WHEN ue.event_type = 'game_completed' THEN 1 END) as game_completions
 				FROM user_events ue
 				INNER JOIN users u ON ue.telegram_id = u.telegram_id
