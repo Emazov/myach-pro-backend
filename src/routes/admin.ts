@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { validateInitData } from '../middleware/validateInitData';
+import { initDataAuth } from '../middleware/validateInitData';
 import { checkAdminRole } from '../middleware/checkAdminRole';
 import {
 	getAdmins,
@@ -12,7 +12,7 @@ import {
 const router = Router();
 
 // Все маршруты требуют валидации Telegram данных и роли админа
-router.use(validateInitData);
+router.use(initDataAuth);
 router.use(checkAdminRole);
 
 // GET /api/admin/admins - получить список админов

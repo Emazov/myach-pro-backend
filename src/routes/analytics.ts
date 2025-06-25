@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { validateInitData, initDataAuth } from '../middleware/validateInitData';
+import { initDataAuth } from '../middleware/validateInitData';
 import { checkAdminRole } from '../middleware/checkAdminRole';
 import {
 	logEvent,
