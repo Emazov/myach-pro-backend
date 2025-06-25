@@ -1,4 +1,5 @@
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chromium from '@sparticuz/chromium';
 import { config } from '../config/env';
 
 export interface ShareImageData {
@@ -29,19 +30,55 @@ export class ImageGenerationService {
 	 */
 	private async initBrowser() {
 		if (!this.browser) {
-			this.browser = await puppeteer.launch({
-				headless: true,
-				args: [
-					'--no-sandbox',
-					'--disable-setuid-sandbox',
-					'--disable-dev-shm-usage',
-					'--disable-accelerated-2d-canvas',
-					'--no-first-run',
-					'--no-zygote',
-					'--single-process',
-					'--disable-gpu',
-				],
-			});
+			// Определяем, используем ли мы serverless окружение
+			const isProduction = process.env.NODE_ENV === 'production';
+
+			if (isProduction) {
+				// Для production (Railway/serverless) используем chromium
+				this.browser = await puppeteer.launch({
+					args: [
+						...chromium.args,
+						'--no-sandbox',
+						'--disable-setuid-sandbox',
+						'--disable-dev-shm-usage',
+						'--disable-accelerated-2d-canvas',
+						'--no-first-run',
+						'--no-zygote',
+						'--single-process',
+						'--disable-gpu',
+					],
+					defaultViewport: chromium.defaultViewport,
+					executablePath: await chromium.executablePath(),
+					headless: chromium.headless,
+				});
+			} else {
+				// Для локальной разработки пытаемся использовать обычный puppeteer
+				try {
+					// Сначала пробуем с chromium (если установлен)
+					this.browser = await puppeteer.launch({
+						args: [...chromium.args],
+						defaultViewport: chromium.defaultViewport,
+						executablePath: await chromium.executablePath(),
+						headless: chromium.headless,
+					});
+				} catch (error) {
+					console.log('Chromium не найден, используем системный Chrome');
+					// Fallback на системный браузер
+					this.browser = await puppeteer.launch({
+						headless: true,
+						args: [
+							'--no-sandbox',
+							'--disable-setuid-sandbox',
+							'--disable-dev-shm-usage',
+							'--disable-accelerated-2d-canvas',
+							'--no-first-run',
+							'--no-zygote',
+							'--single-process',
+							'--disable-gpu',
+						],
+					});
+				}
+			}
 		}
 		return this.browser;
 	}

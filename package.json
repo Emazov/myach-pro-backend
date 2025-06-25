@@ -28,7 +28,8 @@
 		"ioredis": "^5.6.1",
 		"multer": "^2.0.1",
 		"node-telegram-bot-api": "^0.66.0",
-		"puppeteer": "^22.0.0",
+		"puppeteer-core": "^22.0.0",
+		"@sparticuz/chromium": "^126.0.0",
 		"redis": "^5.5.6"
 	},
 	"devDependencies": {
