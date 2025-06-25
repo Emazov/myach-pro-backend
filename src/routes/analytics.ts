@@ -7,6 +7,7 @@ import {
 	completeGameSession,
 	getStats,
 	getDetailedStats,
+	resetAnalytics,
 } from '../controllers/analytics.controller';
 
 const router = Router();
@@ -19,5 +20,8 @@ router.post('/game/complete', initDataAuth, completeGameSession);
 // Приватные маршруты (только для админов) - используют initDataAuth для GET запросов
 router.get('/stats', initDataAuth, checkAdminRole, getStats);
 router.get('/stats/detailed', initDataAuth, checkAdminRole, getDetailedStats);
+
+// Критический маршрут - сброс аналитики (только для админов)
+router.delete('/reset', initDataAuth, checkAdminRole, resetAnalytics);
 
 export default router;

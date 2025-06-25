@@ -337,4 +337,60 @@ export class AnalyticsService {
 			throw new Error('Ошибка при получении детальной статистики');
 		}
 	}
+
+	/**
+	 * Сбрасывает всю аналитику (только для суперадминов)
+	 * Очищает таблицы user_events, game_sessions и удаляет обычных пользователей
+	 */
+	static async resetAnalytics(): Promise<{
+		deletedUserEvents: number;
+		deletedGameSessions: number;
+		deletedUsers: number;
+	}> {
+		try {
+			console.log('Начинаем сброс аналитики...');
+
+			// Подсчитываем количество записей перед удалением для отчета
+			const userEventsCount = await prisma.userEvent.count();
+			const gameSessionsCount = await prisma.gameSession.count();
+			const usersCount = await prisma.user.count({
+				where: { role: 'user' },
+			});
+
+			console.log(
+				`Найдено записей для удаления: ${userEventsCount} событий, ${gameSessionsCount} сессий, ${usersCount} пользователей`,
+			);
+
+			// Выполняем операции удаления в транзакции
+			const result = await prisma.$transaction(async (tx) => {
+				// 1. Удаляем все события пользователей
+				await tx.userEvent.deleteMany({});
+				console.log('Все события пользователей удалены');
+
+				// 2. Удаляем все игровые сессии
+				await tx.gameSession.deleteMany({});
+				console.log('Все игровые сессии удалены');
+
+				// 3. Удаляем всех обычных пользователей (сохраняем только админов)
+				await tx.user.deleteMany({
+					where: {
+						role: 'user',
+					},
+				});
+				console.log('Все обычные пользователи удалены');
+
+				return {
+					deletedUserEvents: userEventsCount,
+					deletedGameSessions: gameSessionsCount,
+					deletedUsers: usersCount,
+				};
+			});
+
+			console.log('Сброс аналитики завершен успешно');
+			return result;
+		} catch (error) {
+			console.error('Ошибка при сбросе аналитики:', error);
+			throw new Error('Ошибка при сбросе аналитики');
+		}
+	}
 }

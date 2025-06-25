@@ -1,0 +1,136 @@
+import { Request, Response, NextFunction } from 'express';
+
+/**
+ * Middleware для отслеживания времени выполнения запросов
+ */
+export const requestTimer = (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	// Сохраняем время начала запроса
+	const start = Date.now();
+
+	// После завершения запроса
+	res.on('finish', () => {
+		// Вычисляем время выполнения
+		const duration = Date.now() - start;
+
+		// Логируем информацию о запросе
+		console.log(
+			`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${
+				res.statusCode
+			} ${duration}ms`,
+		);
+
+		// Добавляем информацию о времени выполнения в заголовки ответа
+		res.setHeader('X-Response-Time', `${duration}ms`);
+
+		// Если запрос выполняется долго, логируем предупреждение
+		if (duration > 500) {
+			console.warn(
+				`Медленный запрос: ${req.method} ${req.originalUrl} - ${duration}ms`,
+			);
+		}
+	});
+
+	next();
+};
+
+/**
+ * Middleware для кэширования HTTP-ответов на стороне клиента
+ */
+export const httpCache = (req: Request, res: Response, next: NextFunction) => {
+	// Для GET и HEAD запросов устанавливаем заголовки кэширования
+	if (req.method === 'GET' || req.method === 'HEAD') {
+		// Для статических ресурсов устанавливаем долгий TTL
+		if (req.path.includes('/static/')) {
+			res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 день
+		}
+		// Для API-запросов устанавливаем короткий TTL
+		else if (req.path.startsWith('/api/')) {
+			// Для запросов, которые редко меняются
+			if (req.path.includes('/clubs') || req.path.includes('/players')) {
+				res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 час
+			} else {
+				// Для остальных API запросов используем условное кэширование
+				res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+				res.setHeader('ETag', `W/"${Date.now().toString(36)}"`);
+			}
+		}
+	}
+
+	next();
+};
+
+/**
+ * Middleware для обработки условных запросов (If-None-Match)
+ */
+export const conditionalGet = (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	const ifNoneMatch = req.headers['if-none-match'];
+	const etag = res.getHeader('ETag');
+
+	if (ifNoneMatch && etag && ifNoneMatch === etag) {
+		res.status(304).end(); // Not Modified
+		return;
+	}
+
+	next();
+};
+
+/**
+ * Middleware для оптимизации соединений
+ */
+export const connectionOptimizer = (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	// Устанавливаем заголовок Keep-Alive для поддержания соединения
+	res.setHeader('Connection', 'keep-alive');
+	res.setHeader('Keep-Alive', 'timeout=5, max=1000');
+
+	next();
+};
+
+/**
+ * Простой rate limiter для защиты от DoS атак
+ * Примечание: для production рекомендуется использовать express-rate-limit с Redis
+ */
+const requestCounts: Record<string, { count: number; resetTime: number }> = {};
+
+export const simpleRateLimit = (
+	maxRequests: number = 100,
+	windowMs: number = 60000,
+) => {
+	return (req: Request, res: Response, next: NextFunction) => {
+		const ip = req.ip || req.socket.remoteAddress || 'unknown';
+		const now = Date.now();
+
+		// Инициализируем счетчик для IP, если его нет
+		if (!requestCounts[ip] || requestCounts[ip].resetTime < now) {
+			requestCounts[ip] = {
+				count: 0,
+				resetTime: now + windowMs,
+			};
+		}
+
+		// Увеличиваем счетчик
+		requestCounts[ip].count++;
+
+		// Если превышен лимит, возвращаем ошибку
+		if (requestCounts[ip].count > maxRequests) {
+			res.status(429).json({
+				error: 'Слишком много запросов. Пожалуйста, попробуйте позже.',
+				retryAfter: Math.ceil((requestCounts[ip].resetTime - now) / 1000),
+			});
+			return;
+		}
+
+		next();
+	};
+};

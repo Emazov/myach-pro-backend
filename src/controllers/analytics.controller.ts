@@ -188,3 +188,44 @@ export const getDetailedStats = async (
 			.json({ error: 'Ошибка при получении детальной статистики' });
 	}
 };
+
+/**
+ * Сбрасывает всю аналитику (только для суперадминов)
+ */
+export const resetAnalytics = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+): Promise<void> => {
+	try {
+		console.log(
+			'Запрос на сброс аналитики от пользователя:',
+			req.body.telegramUser?.id,
+		);
+
+		// Выполняем сброс аналитики
+		const result = await AnalyticsService.resetAnalytics();
+
+		// Инвалидируем весь кэш статистики
+		await invalidateCache(CACHE_KEYS.STATS);
+		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
+
+		console.log('Аналитика сброшена успешно:', result);
+
+		res.json({
+			ok: true,
+			message: 'Аналитика успешно сброшена',
+			data: {
+				deletedUserEvents: result.deletedUserEvents,
+				deletedGameSessions: result.deletedGameSessions,
+				deletedUsers: result.deletedUsers,
+			},
+		});
+	} catch (error) {
+		console.error('Ошибка при сбросе аналитики:', error);
+		res.status(500).json({
+			ok: false,
+			error: 'Ошибка при сбросе аналитики',
+		});
+	}
+};
