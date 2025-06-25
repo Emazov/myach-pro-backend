@@ -12,7 +12,7 @@ interface CacheOptions {
 /**
  * Функция для кэширования результатов асинхронных функций
  * @param fn Асинхронная функция, результат которой нужно кэшировать
- * @param key Ключ для кэширования
+ * @param key Ключ для кэширования (уже с префиксом)
  * @param options Опции кэширования
  * @returns Результат выполнения функции (из кэша или новый)
  */
@@ -21,8 +21,8 @@ export async function withCache<T>(
 	key: string,
 	options: CacheOptions = {},
 ): Promise<T> {
-	const { ttl = 3600, keyPrefix = 'cache:', skipCache = false } = options;
-	const cacheKey = `${keyPrefix}${key}`;
+	const { ttl = 3600, keyPrefix = '', skipCache = false } = options;
+	const cacheKey = keyPrefix ? `${keyPrefix}${key}` : key; // Используем ключ как есть, если префикс не указан
 
 	// Если нужно пропустить кэш (например, для админов), выполняем функцию напрямую
 	if (skipCache) {
@@ -107,4 +107,40 @@ export function createCacheOptions(
 		...baseOptions,
 		skipCache: isAdminUser, // Админы всегда получают актуальные данные
 	};
+}
+
+/**
+ * Очищает весь кеш связанный с клубами и игроками
+ */
+export async function invalidateClubsCache(): Promise<void> {
+	try {
+		// Очищаем все ключи связанные с клубами
+		const patterns = ['cache:clubs:*'];
+
+		for (const pattern of patterns) {
+			await invalidateCache(pattern);
+		}
+
+		console.log('Очищен весь кеш клубов и игроков');
+	} catch (error) {
+		console.error('Ошибка при очистке кеша клубов:', error);
+	}
+}
+
+/**
+ * Очищает весь кеш аналитики
+ */
+export async function invalidateAnalyticsCache(): Promise<void> {
+	try {
+		// Очищаем все ключи связанные с аналитикой
+		const patterns = ['cache:analytics:*'];
+
+		for (const pattern of patterns) {
+			await invalidateCache(pattern);
+		}
+
+		console.log('Очищен весь кеш аналитики');
+	} catch (error) {
+		console.error('Ошибка при очистке кеша аналитики:', error);
+	}
 }

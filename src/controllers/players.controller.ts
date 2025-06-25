@@ -2,16 +2,16 @@ import { Response, NextFunction } from 'express';
 import { TelegramRequest, PlayerWithSignedUrl } from '../types/api';
 import { prisma } from '../prisma';
 import { StorageService } from '../services/storage.service';
-import { invalidateCache } from '../utils/cacheUtils';
+import { invalidateClubsCache } from '../utils/cacheUtils';
 
 // Создаем экземпляр сервиса для хранилища
 const storageService = new StorageService();
 
 // Константы для кэширования клубов (так как изменения игроков влияют на кэш клубов)
 const CLUB_CACHE_KEYS = {
-	ALL_CLUBS: 'clubs:all',
-	CLUB_BY_ID: 'clubs:id:',
-	CLUBS_WITH_PLAYERS: 'clubs:with_players:',
+	ALL_CLUBS: 'cache:clubs:all',
+	CLUB_BY_ID: 'cache:clubs:id:',
+	CLUBS_WITH_PLAYERS: 'cache:clubs:with_players:',
 };
 
 /**
@@ -78,11 +78,7 @@ export const createPlayer = async (
 			: '';
 
 		// Инвалидируем кэш клубов, так как добавился новый игрок
-		await Promise.all([
-			invalidateCache(`${CLUB_CACHE_KEYS.CLUB_BY_ID}${clubId}`),
-			invalidateCache(CLUB_CACHE_KEYS.ALL_CLUBS),
-			invalidateCache(`${CLUB_CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
-		]);
+		await invalidateClubsCache();
 
 		res.status(201).json({
 			ok: true,
@@ -287,11 +283,7 @@ export const updatePlayer = async (
 			: '';
 
 		// Инвалидируем кэш клубов, так как изменился игрок
-		await Promise.all([
-			invalidateCache(`${CLUB_CACHE_KEYS.CLUB_BY_ID}${updatedPlayer.clubId}`),
-			invalidateCache(CLUB_CACHE_KEYS.ALL_CLUBS),
-			invalidateCache(`${CLUB_CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
-		]);
+		await invalidateClubsCache();
 
 		res.json({
 			ok: true,
@@ -357,11 +349,7 @@ export const deletePlayer = async (
 		});
 
 		// Инвалидируем кэш клубов, так как удалился игрок
-		await Promise.all([
-			invalidateCache(`${CLUB_CACHE_KEYS.CLUB_BY_ID}${player.clubId}`),
-			invalidateCache(CLUB_CACHE_KEYS.ALL_CLUBS),
-			invalidateCache(`${CLUB_CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
-		]);
+		await invalidateClubsCache();
 
 		res.json({
 			ok: true,

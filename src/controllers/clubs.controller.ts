@@ -9,6 +9,7 @@ import { StorageService } from '../services/storage.service';
 import {
 	withCache,
 	invalidateCache,
+	invalidateClubsCache,
 	createCacheOptions,
 } from '../utils/cacheUtils';
 import { isUserAdmin, getTelegramIdFromRequest } from '../utils/roleUtils';
@@ -18,9 +19,9 @@ const storageService = new StorageService();
 
 // Константы для кэширования
 const CACHE_KEYS = {
-	ALL_CLUBS: 'clubs:all',
-	CLUB_BY_ID: 'clubs:id:',
-	CLUBS_WITH_PLAYERS: 'clubs:with_players:',
+	ALL_CLUBS: 'cache:clubs:all',
+	CLUB_BY_ID: 'cache:clubs:id:',
+	CLUBS_WITH_PLAYERS: 'cache:clubs:with_players:',
 };
 
 /**
@@ -61,10 +62,7 @@ export const createClub = async (
 			});
 
 			// Инвалидируем все связанные кэши
-			await Promise.all([
-				invalidateCache(CACHE_KEYS.ALL_CLUBS),
-				invalidateCache(`${CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
-			]);
+			await invalidateClubsCache();
 
 			res.status(201).json({
 				ok: true,
@@ -94,10 +92,7 @@ export const createClub = async (
 			: '';
 
 		// Инвалидируем все связанные кэши
-		await Promise.all([
-			invalidateCache(CACHE_KEYS.ALL_CLUBS),
-			invalidateCache(`${CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
-		]);
+		await invalidateClubsCache();
 
 		res.status(201).json({
 			ok: true,
@@ -313,11 +308,7 @@ export const updateClub = async (
 		});
 
 		// Инвалидируем все связанные кэши
-		await Promise.all([
-			invalidateCache(`${CACHE_KEYS.CLUB_BY_ID}${id}`),
-			invalidateCache(CACHE_KEYS.ALL_CLUBS),
-			invalidateCache(`${CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
-		]);
+		await invalidateClubsCache();
 
 		// URL для логотипа
 		const logoUrl = updatedClub.logo
@@ -423,11 +414,7 @@ export const deleteClub = async (
 		});
 
 		// Инвалидируем все связанные кэши
-		await Promise.all([
-			invalidateCache(`${CACHE_KEYS.CLUB_BY_ID}${id}`),
-			invalidateCache(CACHE_KEYS.ALL_CLUBS),
-			invalidateCache(`${CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
-		]);
+		await invalidateClubsCache();
 
 		res.json({
 			ok: true,

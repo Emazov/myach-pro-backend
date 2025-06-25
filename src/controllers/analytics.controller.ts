@@ -4,14 +4,15 @@ import { AnalyticsService, EventType } from '../services/analytics.service';
 import {
 	withCache,
 	invalidateCache,
+	invalidateAnalyticsCache,
 	createCacheOptions,
 } from '../utils/cacheUtils';
 import { isUserAdmin, getTelegramIdFromRequest } from '../utils/roleUtils';
 
 // Константы для кэширования
 const CACHE_KEYS = {
-	STATS: 'analytics:stats',
-	DETAILED_STATS: 'analytics:detailed_stats:',
+	STATS: 'cache:analytics:stats',
+	DETAILED_STATS: 'cache:analytics:detailed_stats:',
 };
 
 /**
@@ -39,9 +40,7 @@ export const logEvent = async (
 		const telegramId = telegramUser.id.toString();
 		await AnalyticsService.logEvent(telegramId, eventType, metadata);
 
-		// Инвалидируем кэш статистики при новых событиях
-		await invalidateCache(CACHE_KEYS.STATS);
-		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
+		// НЕ инвалидируем кэш статистики - обычные пользователи не имеют доступа к статистике
 
 		res.json({ ok: true, message: 'Событие зарегистрировано' });
 	} catch (error) {
@@ -102,10 +101,6 @@ export const startGameSession = async (
 			});
 		}
 
-		// Инвалидируем кэш статистики при новых событиях
-		await invalidateCache(CACHE_KEYS.STATS);
-		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
-
 		res.json({
 			ok: true,
 			sessionId,
@@ -142,9 +137,6 @@ export const completeGameSession = async (
 		await AnalyticsService.logEvent(telegramId, EventType.GAME_COMPLETED);
 
 		// Инвалидируем кэш статистики при новых событиях
-		await invalidateCache(CACHE_KEYS.STATS);
-		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
-
 		res.json({
 			ok: true,
 			message: 'Игровая сессия завершена',
@@ -178,9 +170,6 @@ export const forceCompleteAllSessions = async (
 			telegramId,
 		);
 
-		// Инвалидируем кэш статистики при изменениях
-		await invalidateCache(CACHE_KEYS.STATS);
-		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
 
 		res.json({
 			ok: true,
@@ -309,8 +298,7 @@ export const resetAnalytics = async (
 		const result = await AnalyticsService.resetAnalytics();
 
 		// Инвалидируем весь кэш статистики
-		await invalidateCache(CACHE_KEYS.STATS);
-		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
+		await invalidateAnalyticsCache();
 
 		console.log('Аналитика сброшена успешно:', result);
 

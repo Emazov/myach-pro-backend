@@ -7,6 +7,9 @@ import {
 	removeAdmin,
 	searchUsers,
 	addAdminByUsername,
+	clearClubsCache,
+	clearAnalyticsCache,
+	clearAllCache,
 } from '../controllers/admin.controller';
 
 const router = Router();
@@ -29,5 +32,15 @@ router.get('/search-users', searchUsers);
 
 // POST /api/admin/admins/by-username - добавить админа по username
 router.post('/admins/by-username', addAdminByUsername);
+
+// Маршруты для управления кешем
+// DELETE /api/admin/cache/clubs - очистить кеш клубов и игроков
+router.delete('/cache/clubs', clearClubsCache);
+
+// DELETE /api/admin/cache/analytics - очистить кеш аналитики
+router.delete('/cache/analytics', clearAnalyticsCache);
+
+// DELETE /api/admin/cache/all - очистить весь кеш
+router.delete('/cache/all', clearAllCache);
 
 export default router;

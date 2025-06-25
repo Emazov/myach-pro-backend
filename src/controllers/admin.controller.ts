@@ -1,6 +1,11 @@
 import { Response, NextFunction } from 'express';
 import { TelegramRequest } from '../types/api';
 import { AdminService } from '../services/admin.service';
+import {
+	invalidateClubsCache,
+	invalidateAnalyticsCache,
+} from '../utils/cacheUtils';
+import { redisService } from '../services/redis.service';
 
 /**
  * Получить список всех админов
@@ -164,5 +169,68 @@ export const addAdminByUsername = async (
 	} catch (error) {
 		console.error('Ошибка при добавлении админа по username:', error);
 		res.status(500).json({ error: 'Ошибка сервера' });
+	}
+};
+
+/**
+ * Очистить весь кеш клубов и игроков (только для админов)
+ */
+export const clearClubsCache = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+): Promise<void> => {
+	try {
+		await invalidateClubsCache();
+
+		res.json({
+			ok: true,
+			message: 'Кеш клубов и игроков успешно очищен',
+		});
+	} catch (error) {
+		console.error('Ошибка при очистке кеша клубов:', error);
+		res.status(500).json({ error: 'Ошибка при очистке кеша' });
+	}
+};
+
+/**
+ * Очистить весь кеш аналитики (только для админов)
+ */
+export const clearAnalyticsCache = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+): Promise<void> => {
+	try {
+		await invalidateAnalyticsCache();
+
+		res.json({
+			ok: true,
+			message: 'Кеш аналитики успешно очищен',
+		});
+	} catch (error) {
+		console.error('Ошибка при очистке кеша аналитики:', error);
+		res.status(500).json({ error: 'Ошибка при очистке кеша' });
+	}
+};
+
+/**
+ * Очистить весь кеш (только для админов)
+ */
+export const clearAllCache = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+): Promise<void> => {
+	try {
+		await redisService.flushAll();
+
+		res.json({
+			ok: true,
+			message: 'Весь кеш успешно очищен',
+		});
+	} catch (error) {
+		console.error('Ошибка при полной очистке кеша:', error);
+		res.status(500).json({ error: 'Ошибка при очистке кеша' });
 	}
 };
