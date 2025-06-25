@@ -67,7 +67,9 @@ export class ShareController {
 			);
 
 			// Отправляем изображение пользователю в Telegram
-			const caption = `🏆 ТИР-ЛИСТ "${shareData.clubName.toUpperCase()}"\n\n⚽ Создано в @myach_pro_bot`;
+			const caption = `🏆 ТИР-ЛИСТ "${shareData.clubName.toUpperCase()}"\n\n⚽ Создано в @${
+				config.telegram.botUsername
+			}`;
 
 			await this.bot.sendPhoto(userId, imageBuffer, {
 				caption,
@@ -75,8 +77,8 @@ export class ShareController {
 					inline_keyboard: [
 						[
 							{
-								text: '⚽ Создать свой тир-лист',
-								url: `https://t.me/${config.telegram.botUsername}`,
+								text: 'Открыть Тир Лист',
+								web_app: { url: config.webApp.url },
 							},
 						],
 					],
