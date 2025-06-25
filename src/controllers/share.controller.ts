@@ -122,7 +122,7 @@ export class ShareController {
 				imageData,
 			);
 
-			res.set('Content-Type', 'image/png');
+			res.set('Content-Type', 'image/jpeg');
 			res.send(imageBuffer);
 		} catch (error) {
 			console.error('Ошибка при генерации изображения:', error);

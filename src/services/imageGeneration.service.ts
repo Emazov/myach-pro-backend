@@ -286,9 +286,9 @@ export class ImageGenerationService {
 
 			// Генерируем скриншот
 			const screenshot = await page.screenshot({
-				type: 'png',
+				type: 'jpeg',
 				fullPage: true,
-				quality: 100,
+				quality: 95,
 			});
 
 			return screenshot as Buffer;
