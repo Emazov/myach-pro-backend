@@ -1,7 +1,12 @@
 import { Response, NextFunction } from 'express';
 import { TelegramRequest } from '../types/api';
 import { AnalyticsService, EventType } from '../services/analytics.service';
-import { withCache, invalidateCache } from '../utils/cacheUtils';
+import {
+	withCache,
+	invalidateCache,
+	createCacheOptions,
+} from '../utils/cacheUtils';
+import { isUserAdmin, getTelegramIdFromRequest } from '../utils/roleUtils';
 
 // Константы для кэширования
 const CACHE_KEYS = {
@@ -143,11 +148,18 @@ export const getStats = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {
+		// Проверяем, является ли пользователь админом (админы всегда получают актуальные данные)
+		const telegramId = getTelegramIdFromRequest(req);
+		const isAdmin = telegramId ? await isUserAdmin(telegramId) : false;
+
+		// Создаем опции кэширования с учетом роли пользователя
+		const cacheOptions = createCacheOptions(isAdmin, { ttl: 300 });
+
 		// Используем кэширование для получения статистики
 		const stats = await withCache(
 			async () => await AnalyticsService.getStats(),
 			CACHE_KEYS.STATS,
-			{ ttl: 300 }, // кэш на 5 минут
+			cacheOptions,
 		);
 
 		res.json({ ok: true, stats });
@@ -171,11 +183,18 @@ export const getDetailedStats = async (
 
 		console.log('Запрос детальной статистики на', daysNumber, 'дней');
 
+		// Проверяем, является ли пользователь админом (админы всегда получают актуальные данные)
+		const telegramId = getTelegramIdFromRequest(req);
+		const isAdmin = telegramId ? await isUserAdmin(telegramId) : false;
+
+		// Создаем опции кэширования с учетом роли пользователя
+		const cacheOptions = createCacheOptions(isAdmin, { ttl: 300 });
+
 		// Используем кэширование для получения детальной статистики
 		const stats = await withCache(
 			async () => await AnalyticsService.getDetailedStats(daysNumber),
 			`${CACHE_KEYS.DETAILED_STATS}${daysNumber}`,
-			{ ttl: 300 }, // кэш на 5 минут
+			cacheOptions,
 		);
 
 		console.log('Статистика получена успешно, отправляем ответ');

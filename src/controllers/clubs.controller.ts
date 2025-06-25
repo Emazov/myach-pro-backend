@@ -6,7 +6,12 @@ import {
 } from '../types/api';
 import { prisma } from '../prisma';
 import { StorageService } from '../services/storage.service';
-import { withCache, invalidateCache } from '../utils/cacheUtils';
+import {
+	withCache,
+	invalidateCache,
+	createCacheOptions,
+} from '../utils/cacheUtils';
+import { isUserAdmin, getTelegramIdFromRequest } from '../utils/roleUtils';
 
 // Создаем экземпляр сервиса для хранилища
 const storageService = new StorageService();
@@ -15,6 +20,7 @@ const storageService = new StorageService();
 const CACHE_KEYS = {
 	ALL_CLUBS: 'clubs:all',
 	CLUB_BY_ID: 'clubs:id:',
+	CLUBS_WITH_PLAYERS: 'clubs:with_players:',
 };
 
 /**
@@ -54,8 +60,11 @@ export const createClub = async (
 				},
 			});
 
-			// Инвалидируем кэш списка клубов
-			await invalidateCache(CACHE_KEYS.ALL_CLUBS);
+			// Инвалидируем все связанные кэши
+			await Promise.all([
+				invalidateCache(CACHE_KEYS.ALL_CLUBS),
+				invalidateCache(`${CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
+			]);
 
 			res.status(201).json({
 				ok: true,
@@ -84,8 +93,11 @@ export const createClub = async (
 			? await storageService.getSignedUrl(club.logo)
 			: '';
 
-		// Инвалидируем кэш списка клубов
-		await invalidateCache(CACHE_KEYS.ALL_CLUBS);
+		// Инвалидируем все связанные кэши
+		await Promise.all([
+			invalidateCache(CACHE_KEYS.ALL_CLUBS),
+			invalidateCache(`${CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
+		]);
 
 		res.status(201).json({
 			ok: true,
@@ -110,10 +122,19 @@ export const getAllClubs = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {
+		// Проверяем, является ли пользователь админом
+		const telegramId = getTelegramIdFromRequest(req);
+		const isAdmin = telegramId ? await isUserAdmin(telegramId) : false;
+
+		// Создаем опции кэширования с учетом роли пользователя
+		const cacheOptions = createCacheOptions(isAdmin, { ttl: 3600 });
+
 		// Используем кэширование для получения списка клубов
 		const formattedClubs = await withCache(
 			async () => {
-				const clubs = await prisma.club.findMany({});
+				const clubs = await prisma.club.findMany({
+					orderBy: { name: 'asc' },
+				});
 
 				// Генерируем подписанные URL и формируем ответ
 				return Promise.all(
@@ -133,7 +154,7 @@ export const getAllClubs = async (
 				);
 			},
 			CACHE_KEYS.ALL_CLUBS,
-			{ ttl: 3600 }, // кэш на 1 час
+			cacheOptions,
 		);
 
 		res.json({
@@ -162,6 +183,13 @@ export const getClubById = async (
 			return;
 		}
 
+		// Проверяем, является ли пользователь админом
+		const telegramId = getTelegramIdFromRequest(req);
+		const isAdmin = telegramId ? await isUserAdmin(telegramId) : false;
+
+		// Создаем опции кэширования с учетом роли пользователя
+		const cacheOptions = createCacheOptions(isAdmin, { ttl: 3600 });
+
 		// Используем кэширование для получения информации о клубе
 		const clubData = await withCache(
 			async () => {
@@ -170,7 +198,9 @@ export const getClubById = async (
 						id,
 					},
 					include: {
-						players: true,
+						players: {
+							orderBy: { name: 'asc' },
+						},
 					},
 				});
 
@@ -205,7 +235,7 @@ export const getClubById = async (
 				};
 			},
 			`${CACHE_KEYS.CLUB_BY_ID}${id}`,
-			{ ttl: 3600 }, // кэш на 1 час
+			cacheOptions,
 		);
 
 		if (!clubData) {
@@ -282,10 +312,11 @@ export const updateClub = async (
 			},
 		});
 
-		// Инвалидируем кэш для обновленного клуба и списка всех клубов
+		// Инвалидируем все связанные кэши
 		await Promise.all([
 			invalidateCache(`${CACHE_KEYS.CLUB_BY_ID}${id}`),
 			invalidateCache(CACHE_KEYS.ALL_CLUBS),
+			invalidateCache(`${CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
 		]);
 
 		// URL для логотипа
@@ -391,8 +422,12 @@ export const deleteClub = async (
 			},
 		});
 
-		// Инвалидируем кэш списка всех клубов
-		await invalidateCache(CACHE_KEYS.ALL_CLUBS);
+		// Инвалидируем все связанные кэши
+		await Promise.all([
+			invalidateCache(`${CACHE_KEYS.CLUB_BY_ID}${id}`),
+			invalidateCache(CACHE_KEYS.ALL_CLUBS),
+			invalidateCache(`${CACHE_KEYS.CLUBS_WITH_PLAYERS}*`),
+		]);
 
 		res.json({
 			ok: true,

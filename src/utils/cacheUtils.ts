@@ -6,6 +6,7 @@ import { redisService } from '../services/redis.service';
 interface CacheOptions {
 	ttl?: number; // время жизни кэша в секундах
 	keyPrefix?: string; // префикс для ключа кэша
+	skipCache?: boolean; // пропустить кэш (для админов)
 }
 
 /**
@@ -20,8 +21,14 @@ export async function withCache<T>(
 	key: string,
 	options: CacheOptions = {},
 ): Promise<T> {
-	const { ttl = 3600, keyPrefix = 'cache:' } = options;
+	const { ttl = 3600, keyPrefix = 'cache:', skipCache = false } = options;
 	const cacheKey = `${keyPrefix}${key}`;
+
+	// Если нужно пропустить кэш (например, для админов), выполняем функцию напрямую
+	if (skipCache) {
+		console.log(`Пропускаем кэш для ключа: ${cacheKey}`);
+		return await fn();
+	}
 
 	// Проверяем наличие данных в кэше
 	const cachedData = await redisService.get(cacheKey);
@@ -29,6 +36,7 @@ export async function withCache<T>(
 	if (cachedData) {
 		try {
 			// Если данные есть, возвращаем их
+			console.log(`Данные получены из кэша: ${cacheKey}`);
 			return JSON.parse(cachedData) as T;
 		} catch (error) {
 			console.error('Ошибка при парсинге кэша:', error);
@@ -37,11 +45,13 @@ export async function withCache<T>(
 	}
 
 	// Если кэша нет или произошла ошибка, выполняем функцию
+	console.log(`Кэш не найден, выполняем функцию: ${cacheKey}`);
 	const result = await fn();
 
 	// Сохраняем результат в кэш
 	try {
 		await redisService.set(cacheKey, JSON.stringify(result), ttl);
+		console.log(`Результат сохранен в кэш: ${cacheKey}`);
 	} catch (error) {
 		console.error('Ошибка при сохранении в кэш:', error);
 	}
@@ -61,8 +71,40 @@ export async function invalidateCache(keyPattern: string): Promise<void> {
 		// Если есть ключи, удаляем их
 		if (keys.length > 0) {
 			await redisService.deleteMany(keys);
+			console.log(
+				`Очищен кэш для ${keys.length} ключей по шаблону: ${keyPattern}`,
+			);
+		} else {
+			console.log(`Не найдено ключей для очистки по шаблону: ${keyPattern}`);
 		}
 	} catch (error) {
 		console.error('Ошибка при очистке кэша:', error);
 	}
+}
+
+/**
+ * Проверяет, является ли пользователь администратором
+ * @param telegramUser Данные пользователя из Telegram
+ * @returns true, если пользователь админ
+ */
+export function isAdmin(telegramUser: any): boolean {
+	// Здесь можно добавить дополнительную логику проверки
+	// Пока возвращаем false, так как роль проверяется в middleware
+	return false;
+}
+
+/**
+ * Создает опции кэширования с учетом роли пользователя
+ * @param isAdminUser Является ли пользователь админом
+ * @param baseOptions Базовые опции кэширования
+ * @returns Опции кэширования
+ */
+export function createCacheOptions(
+	isAdminUser: boolean,
+	baseOptions: CacheOptions = {},
+): CacheOptions {
+	return {
+		...baseOptions,
+		skipCache: isAdminUser, // Админы всегда получают актуальные данные
+	};
 }
