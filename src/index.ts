@@ -7,6 +7,7 @@ import { config } from './config/env';
 import { TelegramBotService } from './bot/telegramBot';
 import { redisService } from './services/redis.service';
 import { AnalyticsService } from './services/analytics.service';
+import { imageGenerationService } from './services/imageGeneration.service';
 
 import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
@@ -14,6 +15,7 @@ import playersRoutes from './routes/players';
 import adminRoutes from './routes/admin';
 import analyticsRoutes from './routes/analytics';
 import uploadRoutes from './routes/upload';
+import shareRoutes from './routes/share';
 import { errorHandler } from './utils/errorHandler';
 
 /**
@@ -47,6 +49,7 @@ const initApp = () => {
 	app.use('/api/admin', adminRoutes);
 	app.use('/api/analytics', analyticsRoutes);
 	app.use('/api/upload', uploadRoutes);
+	app.use('/api/share', shareRoutes);
 
 	// Подключаем обработчик ошибок
 	app.use(errorHandler);
@@ -69,15 +72,17 @@ const initApp = () => {
 	}, 30 * 60 * 1000); // 30 минут
 
 	// Очищаем интервал при выключении приложения
-	process.on('SIGINT', () => {
+	process.on('SIGINT', async () => {
 		console.log('Выключение приложения...');
 		clearInterval(cleanupInterval);
+		await imageGenerationService.cleanup();
 		process.exit(0);
 	});
 
-	process.on('SIGTERM', () => {
+	process.on('SIGTERM', async () => {
 		console.log('Выключение приложения...');
 		clearInterval(cleanupInterval);
+		await imageGenerationService.cleanup();
 		process.exit(0);
 	});
 

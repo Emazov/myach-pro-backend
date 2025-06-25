@@ -1,4 +1,4 @@
-import { parse } from '@telegram-apps/init-data-node';
+import { parse, validate } from '@telegram-apps/init-data-node';
 
 export function parseInitData(initDataRaw: string) {
 	try {
@@ -9,3 +9,15 @@ export function parseInitData(initDataRaw: string) {
 		throw new Error(`Failed to parse init data: ${e.message}`);
 	}
 }
+
+export const initDataUtils = {
+	parse: parseInitData,
+	validate: (initData: string, botToken: string) => {
+		try {
+			validate(initData, botToken);
+			return { isValid: true };
+		} catch (error: any) {
+			return { isValid: false, error: error.message };
+		}
+	},
+};

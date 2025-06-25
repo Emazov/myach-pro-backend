@@ -60,3 +60,6 @@ export function initDataAuth(
 		res.status(403).json({ error: e.message || 'Ошибка авторизации' });
 	}
 }
+
+// Экспортируем как validateInitData для совместимости
+export const validateInitData = initDataAuth;
