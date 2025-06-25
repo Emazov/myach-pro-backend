@@ -85,17 +85,15 @@ export class AnalyticsService {
 			});
 
 			if (activeSession) {
-				// Завершаем предыдущую сессию, если она была
-				await prisma.gameSession.update({
-					where: { id: activeSession.id },
-					data: {
-						isCompleted: true,
-						completedAt: new Date(),
-					},
-				});
+				// НЕ завершаем предыдущую сессию автоматически
+				// Возвращаем ID существующей активной сессии
+				console.log(
+					`Найдена активная сессия для пользователя ${telegramId}: ${activeSession.id}`,
+				);
+				return activeSession.id;
 			}
 
-			// Создаем новую сессию
+			// Создаем новую сессию только если нет активной
 			const session = await prisma.gameSession.create({
 				data: {
 					telegramId,
@@ -106,6 +104,136 @@ export class AnalyticsService {
 			return session.id;
 		} catch (error) {
 			console.error('Ошибка при создании игровой сессии:', error);
+			return null;
+		}
+	}
+
+	/**
+	 * Проверяет, нужно ли логировать APP_START для пользователя
+	 */
+	static async shouldLogAppStart(telegramId: string): Promise<boolean> {
+		try {
+			// Проверяем, есть ли APP_START событие за последние 24 часа
+			const yesterday = new Date();
+			yesterday.setDate(yesterday.getDate() - 1);
+
+			const recentAppStart = await prisma.userEvent.findFirst({
+				where: {
+					telegramId,
+					eventType: EventType.APP_START,
+					createdAt: {
+						gte: yesterday,
+					},
+				},
+			});
+
+			return !recentAppStart; // Логируем только если нет APP_START за последние 24 часа
+		} catch (error) {
+			console.error('Ошибка при проверке APP_START:', error);
+			return true; // В случае ошибки логируем
+		}
+	}
+
+	/**
+	 * Завершает активные сессии старше указанного времени
+	 */
+	static async expireOldSessions(hoursOld: number = 24): Promise<number> {
+		try {
+			const expireTime = new Date();
+			expireTime.setHours(expireTime.getHours() - hoursOld);
+
+			const result = await prisma.gameSession.updateMany({
+				where: {
+					isCompleted: false,
+					startedAt: {
+						lt: expireTime,
+					},
+				},
+				data: {
+					isCompleted: true,
+					completedAt: new Date(),
+				},
+			});
+
+			if (result.count > 0) {
+				console.log(`Истекло ${result.count} старых игровых сессий`);
+			}
+
+			return result.count;
+		} catch (error) {
+			console.error('Ошибка при истечении старых сессий:', error);
+			return 0;
+		}
+	}
+
+	/**
+	 * Принудительно завершает все активные сессии пользователя
+	 */
+	static async forceCompleteUserSessions(telegramId: string): Promise<number> {
+		try {
+			// Проверяем роль пользователя - не завершаем сессии для админов
+			const user = await prisma.user.findUnique({
+				where: { telegramId },
+				select: { role: true },
+			});
+
+			if (user?.role === 'admin') {
+				console.log(`Пропускаем завершение сессий для админа ${telegramId}`);
+				return 0;
+			}
+
+			const result = await prisma.gameSession.updateMany({
+				where: {
+					telegramId,
+					isCompleted: false,
+				},
+				data: {
+					isCompleted: true,
+					completedAt: new Date(),
+				},
+			});
+
+			console.log(
+				`Принудительно завершено ${result.count} сессий для пользователя ${telegramId}`,
+			);
+			return result.count;
+		} catch (error) {
+			console.error('Ошибка при принудительном завершении сессий:', error);
+			return 0;
+		}
+	}
+
+	/**
+	 * Получает активную сессию пользователя
+	 */
+	static async getActiveSession(telegramId: string): Promise<any> {
+		try {
+			// Проверяем роль пользователя - не получаем сессии для админов
+			const user = await prisma.user.findUnique({
+				where: { telegramId },
+				select: { role: true },
+			});
+
+			if (user?.role === 'admin') {
+				console.log(
+					`Пропускаем получение активной сессии для админа ${telegramId}`,
+				);
+				return null;
+			}
+
+			const activeSession = await prisma.gameSession.findFirst({
+				where: {
+					telegramId,
+					isCompleted: false,
+				},
+				orderBy: {
+					startedAt: 'desc',
+				},
+			});
+
+			return activeSession;
+		} catch (error) {
+			console.error('Ошибка при получении активной сессии:', error);
 			return null;
 		}
 	}

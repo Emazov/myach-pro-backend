@@ -6,6 +6,7 @@ import path from 'path';
 import { config } from './config/env';
 import { TelegramBotService } from './bot/telegramBot';
 import { redisService } from './services/redis.service';
+import { AnalyticsService } from './services/analytics.service';
 
 import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
@@ -53,9 +54,39 @@ const initApp = () => {
 	// Инициализируем бота
 	const botService = new TelegramBotService();
 
+	// Запускаем периодическую задачу для очистки старых игровых сессий (каждые 30 минут)
+	const cleanupInterval = setInterval(async () => {
+		try {
+			const expiredCount = await AnalyticsService.expireOldSessions(24);
+			if (expiredCount > 0) {
+				console.log(
+					`Автоматически истекло ${expiredCount} старых игровых сессий`,
+				);
+			}
+		} catch (error) {
+			console.error('Ошибка при автоматической очистке старых сессий:', error);
+		}
+	}, 30 * 60 * 1000); // 30 минут
+
+	// Очищаем интервал при выключении приложения
+	process.on('SIGINT', () => {
+		console.log('Выключение приложения...');
+		clearInterval(cleanupInterval);
+		process.exit(0);
+	});
+
+	process.on('SIGTERM', () => {
+		console.log('Выключение приложения...');
+		clearInterval(cleanupInterval);
+		process.exit(0);
+	});
+
 	// Запускаем сервер
 	app.listen(config.port, () => {
 		console.log(`Сервер запущен на порту ${config.port}`);
+		console.log(
+			'Периодическая очистка старых игровых сессий запущена (каждые 30 минут)',
+		);
 	});
 
 	return {

@@ -5,6 +5,8 @@ import {
 	logEvent,
 	startGameSession,
 	completeGameSession,
+	forceCompleteAllSessions,
+	getActiveSession,
 	getStats,
 	getDetailedStats,
 	resetAnalytics,
@@ -16,6 +18,8 @@ const router = Router();
 router.post('/event', initDataAuth, logEvent);
 router.post('/game/start', initDataAuth, startGameSession);
 router.post('/game/complete', initDataAuth, completeGameSession);
+router.post('/game/force-complete', initDataAuth, forceCompleteAllSessions);
+router.post('/game/active', initDataAuth, getActiveSession);
 
 // Приватные маршруты (только для админов) - используют initDataAuth для GET запросов
 router.get('/stats', initDataAuth, checkAdminRole, getStats);

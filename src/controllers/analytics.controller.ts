@@ -73,20 +73,34 @@ export const startGameSession = async (
 		}
 
 		const telegramId = telegramUser.id.toString();
+
+		// Истекаем старые сессии перед созданием новой
+		await AnalyticsService.expireOldSessions(24);
+
+		// Проверяем, нужно ли логировать APP_START
+		const shouldLogAppStart = await AnalyticsService.shouldLogAppStart(
+			telegramId,
+		);
+
 		const sessionId = await AnalyticsService.startGameSession(
 			telegramId,
 			clubId,
 		);
 
-		// Логируем событие запуска приложения (только при начале игры)
-		await AnalyticsService.logEvent(telegramId, EventType.APP_START, {
-			clubId,
-		});
+		// Логируем событие запуска приложения только если нужно
+		if (shouldLogAppStart) {
+			await AnalyticsService.logEvent(telegramId, EventType.APP_START, {
+				clubId,
+			});
+		}
 
-		// Логируем событие начала игры
-		await AnalyticsService.logEvent(telegramId, EventType.GAME_START, {
-			clubId,
-		});
+		// Логируем событие начала игры только при создании новой сессии
+		if (sessionId) {
+			await AnalyticsService.logEvent(telegramId, EventType.GAME_START, {
+				clubId,
+				sessionId,
+			});
+		}
 
 		// Инвалидируем кэш статистики при новых событиях
 		await invalidateCache(CACHE_KEYS.STATS);
@@ -95,7 +109,9 @@ export const startGameSession = async (
 		res.json({
 			ok: true,
 			sessionId,
-			message: 'Игровая сессия начата',
+			message: sessionId
+				? 'Игровая сессия начата'
+				: 'Продолжение активной сессии',
 		});
 	} catch (error) {
 		console.error('Ошибка при начале игровой сессии:', error);
@@ -135,6 +151,73 @@ export const completeGameSession = async (
 		});
 	} catch (error) {
 		console.error('Ошибка при завершении игровой сессии:', error);
+		res.status(500).json({ error: 'Ошибка сервера' });
+	}
+};
+
+/**
+ * Принудительно завершает все незавершенные сессии пользователя
+ */
+export const forceCompleteAllSessions = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+): Promise<void> => {
+	try {
+		const { telegramUser } = req.body;
+
+		if (!telegramUser) {
+			res.status(400).json({ error: 'Данные пользователя не найдены' });
+			return;
+		}
+
+		const telegramId = telegramUser.id.toString();
+
+		// Принудительно завершаем все активные сессии
+		const completedCount = await AnalyticsService.forceCompleteUserSessions(
+			telegramId,
+		);
+
+		// Инвалидируем кэш статистики при изменениях
+		await invalidateCache(CACHE_KEYS.STATS);
+		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
+
+		res.json({
+			ok: true,
+			completedSessions: completedCount,
+			message: `Принудительно завершено ${completedCount} сессий`,
+		});
+	} catch (error) {
+		console.error('Ошибка при принудительном завершении сессий:', error);
+		res.status(500).json({ error: 'Ошибка сервера' });
+	}
+};
+
+/**
+ * Получает статус активной сессии пользователя
+ */
+export const getActiveSession = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+): Promise<void> => {
+	try {
+		const { telegramUser } = req.body;
+
+		if (!telegramUser) {
+			res.status(400).json({ error: 'Данные пользователя не найдены' });
+			return;
+		}
+
+		const telegramId = telegramUser.id.toString();
+		const activeSession = await AnalyticsService.getActiveSession(telegramId);
+
+		res.json({
+			ok: true,
+			activeSession,
+		});
+	} catch (error) {
+		console.error('Ошибка при получении активной сессии:', error);
 		res.status(500).json({ error: 'Ошибка сервера' });
 	}
 };
