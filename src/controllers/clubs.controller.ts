@@ -6,9 +6,16 @@ import {
 } from '../types/api';
 import { prisma } from '../prisma';
 import { StorageService } from '../services/storage.service';
+import { withCache, invalidateCache } from '../utils/cacheUtils';
 
 // Создаем экземпляр сервиса для хранилища
 const storageService = new StorageService();
+
+// Константы для кэширования
+const CACHE_KEYS = {
+	ALL_CLUBS: 'clubs:all',
+	CLUB_BY_ID: 'clubs:id:',
+};
 
 /**
  * Создание нового клуба (только для админа)
@@ -47,6 +54,9 @@ export const createClub = async (
 				},
 			});
 
+			// Инвалидируем кэш списка клубов
+			await invalidateCache(CACHE_KEYS.ALL_CLUBS);
+
 			res.status(201).json({
 				ok: true,
 				club: {
@@ -74,6 +84,9 @@ export const createClub = async (
 			? await storageService.getSignedUrl(club.logo)
 			: '';
 
+		// Инвалидируем кэш списка клубов
+		await invalidateCache(CACHE_KEYS.ALL_CLUBS);
+
 		res.status(201).json({
 			ok: true,
 			club: {
@@ -97,23 +110,30 @@ export const getAllClubs = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {
-		const clubs = await prisma.club.findMany({});
+		// Используем кэширование для получения списка клубов
+		const formattedClubs = await withCache(
+			async () => {
+				const clubs = await prisma.club.findMany({});
 
-		// Генерируем подписанные URL и формируем ответ
-		const formattedClubs = await Promise.all(
-			clubs.map(async (club) => {
-				// URL для логотипа
-				const logoUrl = club.logo
-					? await storageService.getSignedUrl(club.logo)
-					: '';
+				// Генерируем подписанные URL и формируем ответ
+				return Promise.all(
+					clubs.map(async (club) => {
+						// URL для логотипа
+						const logoUrl = club.logo
+							? await storageService.getSignedUrl(club.logo)
+							: '';
 
-				// Финальный формат клуба
-				return {
-					id: club.id,
-					name: club.name,
-					logoUrl,
-				};
-			}),
+						// Финальный формат клуба
+						return {
+							id: club.id,
+							name: club.name,
+							logoUrl,
+						};
+					}),
+				);
+			},
+			CACHE_KEYS.ALL_CLUBS,
+			{ ttl: 3600 }, // кэш на 1 час
 		);
 
 		res.json({
@@ -142,47 +162,60 @@ export const getClubById = async (
 			return;
 		}
 
-		const club = await prisma.club.findUnique({
-			where: {
-				id,
-			},
-			include: {
-				players: true,
-			},
-		});
+		// Используем кэширование для получения информации о клубе
+		const clubData = await withCache(
+			async () => {
+				const club = await prisma.club.findUnique({
+					where: {
+						id,
+					},
+					include: {
+						players: true,
+					},
+				});
 
-		if (!club) {
+				if (!club) {
+					return null;
+				}
+
+				// URL для логотипа
+				const logoUrl = club.logo
+					? await storageService.getSignedUrl(club.logo)
+					: '';
+
+				// Игроки с аватарами
+				const players = await Promise.all(
+					club.players.map(async (player) => {
+						const avatarUrl = player.avatar
+							? await storageService.getSignedUrl(player.avatar)
+							: '';
+						return {
+							id: player.id,
+							name: player.name,
+							avatarUrl,
+						};
+					}),
+				);
+
+				return {
+					id: club.id,
+					name: club.name,
+					logoUrl,
+					players,
+				};
+			},
+			`${CACHE_KEYS.CLUB_BY_ID}${id}`,
+			{ ttl: 3600 }, // кэш на 1 час
+		);
+
+		if (!clubData) {
 			res.status(404).json({ error: 'Клуб не найден' });
 			return;
 		}
 
-		// URL для логотипа
-		const logoUrl = club.logo
-			? await storageService.getSignedUrl(club.logo)
-			: '';
-
-		// Игроки с аватарами
-		const players = await Promise.all(
-			club.players.map(async (player) => {
-				const avatarUrl = player.avatar
-					? await storageService.getSignedUrl(player.avatar)
-					: '';
-				return {
-					id: player.id,
-					name: player.name,
-					avatarUrl,
-				};
-			}),
-		);
-
 		res.json({
 			ok: true,
-			club: {
-				id: club.id,
-				name: club.name,
-				logoUrl,
-				players,
-			},
+			club: clubData,
 		});
 	} catch (err: any) {
 		console.error('Ошибка при получении клуба:', err);
@@ -248,6 +281,12 @@ export const updateClub = async (
 				logo: logoKey,
 			},
 		});
+
+		// Инвалидируем кэш для обновленного клуба и списка всех клубов
+		await Promise.all([
+			invalidateCache(`${CACHE_KEYS.CLUB_BY_ID}${id}`),
+			invalidateCache(CACHE_KEYS.ALL_CLUBS),
+		]);
 
 		// URL для логотипа
 		const logoUrl = updatedClub.logo
@@ -351,6 +390,9 @@ export const deleteClub = async (
 				id,
 			},
 		});
+
+		// Инвалидируем кэш списка всех клубов
+		await invalidateCache(CACHE_KEYS.ALL_CLUBS);
 
 		res.json({
 			ok: true,

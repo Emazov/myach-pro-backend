@@ -5,6 +5,7 @@ import path from 'path';
 
 import { config } from './config/env';
 import { TelegramBotService } from './bot/telegramBot';
+import { redisService } from './services/redis.service';
 
 import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
@@ -60,6 +61,7 @@ const initApp = () => {
 	return {
 		app,
 		bot: botService,
+		redis: redisService,
 	};
 };
 

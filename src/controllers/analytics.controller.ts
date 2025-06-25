@@ -1,6 +1,13 @@
 import { Response, NextFunction } from 'express';
 import { TelegramRequest } from '../types/api';
 import { AnalyticsService, EventType } from '../services/analytics.service';
+import { withCache, invalidateCache } from '../utils/cacheUtils';
+
+// Константы для кэширования
+const CACHE_KEYS = {
+	STATS: 'analytics:stats',
+	DETAILED_STATS: 'analytics:detailed_stats:',
+};
 
 /**
  * Логирует событие пользователя
@@ -26,6 +33,10 @@ export const logEvent = async (
 
 		const telegramId = telegramUser.id.toString();
 		await AnalyticsService.logEvent(telegramId, eventType, metadata);
+
+		// Инвалидируем кэш статистики при новых событиях
+		await invalidateCache(CACHE_KEYS.STATS);
+		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
 
 		res.json({ ok: true, message: 'Событие зарегистрировано' });
 	} catch (error) {
@@ -72,6 +83,10 @@ export const startGameSession = async (
 			clubId,
 		});
 
+		// Инвалидируем кэш статистики при новых событиях
+		await invalidateCache(CACHE_KEYS.STATS);
+		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
+
 		res.json({
 			ok: true,
 			sessionId,
@@ -105,6 +120,10 @@ export const completeGameSession = async (
 		// Логируем событие завершения игры
 		await AnalyticsService.logEvent(telegramId, EventType.GAME_COMPLETED);
 
+		// Инвалидируем кэш статистики при новых событиях
+		await invalidateCache(CACHE_KEYS.STATS);
+		await invalidateCache(`${CACHE_KEYS.DETAILED_STATS}*`);
+
 		res.json({
 			ok: true,
 			message: 'Игровая сессия завершена',
@@ -124,7 +143,13 @@ export const getStats = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {
-		const stats = await AnalyticsService.getStats();
+		// Используем кэширование для получения статистики
+		const stats = await withCache(
+			async () => await AnalyticsService.getStats(),
+			CACHE_KEYS.STATS,
+			{ ttl: 300 }, // кэш на 5 минут
+		);
+
 		res.json({ ok: true, stats });
 	} catch (error) {
 		console.error('Ошибка при получении статистики:', error);
@@ -145,8 +170,14 @@ export const getDetailedStats = async (
 		const daysNumber = days ? parseInt(days as string) : 7;
 
 		console.log('Запрос детальной статистики на', daysNumber, 'дней');
-		const stats = await AnalyticsService.getDetailedStats(daysNumber);
-		console.log('Полученная статистика:', JSON.stringify(stats, null, 2));
+
+		// Используем кэширование для получения детальной статистики
+		const stats = await withCache(
+			async () => await AnalyticsService.getDetailedStats(daysNumber),
+			`${CACHE_KEYS.DETAILED_STATS}${daysNumber}`,
+			{ ttl: 300 }, // кэш на 5 минут
+		);
+
 		console.log('Статистика получена успешно, отправляем ответ');
 
 		res.json({ ok: true, stats });

@@ -14,6 +14,26 @@ const getEnvVar = (key: string, defaultValue?: string): string => {
 	return value;
 };
 
+// Получаем URL Redis из разных возможных переменных окружения
+const getRedisUrl = (): string => {
+	// Проверяем наличие основного URL
+	if (process.env.REDIS_URL) {
+		return process.env.REDIS_URL;
+	}
+
+	// Проверяем наличие Railway специфичных переменных
+	if (process.env.REDISHOST && process.env.REDISPORT) {
+		const password = process.env.REDISPASSWORD
+			? `:${process.env.REDISPASSWORD}@`
+			: '';
+		const user = process.env.REDISUSER ? `${process.env.REDISUSER}:` : '';
+		return `redis://${user}${password}${process.env.REDISHOST}:${process.env.REDISPORT}`;
+	}
+
+	// Если нет ни одной переменной для Redis, возвращаем локальный URL
+	return 'redis://localhost:6379';
+};
+
 // Типизированные переменные окружения
 export const config = {
 	port: parseInt(getEnvVar('PORT', '3001'), 10),
@@ -33,5 +53,8 @@ export const config = {
 		bucketName: getEnvVar('R2_BUCKET_NAME'),
 		endpoint: getEnvVar('R2_ENDPOINT'),
 		publicDomain: getEnvVar('R2_PUBLIC_DOMAIN', ''),
+	},
+	redis: {
+		url: getRedisUrl(),
 	},
 };
