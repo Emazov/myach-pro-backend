@@ -70,11 +70,20 @@ export function validateInitData(
 	next: NextFunction,
 ): void {
 	try {
+		console.log('validateInitData - Request URL:', req.url);
+		console.log('validateInitData - Request method:', req.method);
+		console.log('validateInitData - Body keys:', Object.keys(req.body || {}));
+		console.log('validateInitData - Query keys:', Object.keys(req.query || {}));
+
 		// Получаем initData из body или query параметров
 		const initDataRaw = req.body?.initData || (req.query?.initData as string);
 
 		if (!initDataRaw) {
-			console.error('Ошибка авторизации: отсутствует initData');
+			console.error(
+				'validateInitData - Ошибка авторизации: отсутствует initData',
+			);
+			console.log('validateInitData - Body:', req.body);
+			console.log('validateInitData - Query:', req.query);
 			res
 				.status(401)
 				.json({ error: 'Доступ запрещен. Необходимо авторизоваться' });
