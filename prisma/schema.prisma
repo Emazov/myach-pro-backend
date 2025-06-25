@@ -22,6 +22,10 @@ model User {
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt @map("updated_at")
 
+    // Связи
+    userEvents   UserEvent[]   @relation("UserEvents")
+    gameSessions GameSession[] @relation("UserSessions")
+
     @@map("users")
 }
 
@@ -71,6 +75,9 @@ model UserEvent {
     metadata   Json? // дополнительные данные (например, clubId для игры)
     createdAt  DateTime @default(now()) @map("created_at")
 
+    // Связь с пользователем
+    User User @relation("UserEvents", fields: [telegramId], references: [telegramId])
+
     @@index([telegramId])
     @@index([eventType])
     @@index([createdAt])
@@ -84,6 +91,9 @@ model GameSession {
     startedAt   DateTime  @default(now()) @map("started_at")
     completedAt DateTime? @map("completed_at")
     isCompleted Boolean   @default(false) @map("is_completed")
+
+    // Связь с пользователем
+    User User @relation("UserSessions", fields: [telegramId], references: [telegramId])
 
     @@index([telegramId])
     @@index([isCompleted])

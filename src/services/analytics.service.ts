@@ -56,13 +56,26 @@ export class AnalyticsService {
 	}
 
 	/**
-	 * Начинает новую игровую сессию
+	 * Начинает новую игровую сессию (исключая админов)
 	 */
 	static async startGameSession(
 		telegramId: string,
 		clubId: string,
 	): Promise<string | null> {
 		try {
+			// Проверяем роль пользователя - не создаем сессии для админов
+			const user = await prisma.user.findUnique({
+				where: { telegramId },
+				select: { role: true },
+			});
+
+			if (user?.role === 'admin') {
+				console.log(
+					`Пропускаем создание игровой сессии для админа ${telegramId}`,
+				);
+				return null;
+			}
+
 			// Проверяем, есть ли уже активная сессия
 			const activeSession = await prisma.gameSession.findFirst({
 				where: {
@@ -98,10 +111,23 @@ export class AnalyticsService {
 	}
 
 	/**
-	 * Завершает игровую сессию
+	 * Завершает игровую сессию (исключая админов)
 	 */
 	static async completeGameSession(telegramId: string): Promise<void> {
 		try {
+			// Проверяем роль пользователя - не завершаем сессии для админов
+			const user = await prisma.user.findUnique({
+				where: { telegramId },
+				select: { role: true },
+			});
+
+			if (user?.role === 'admin') {
+				console.log(
+					`Пропускаем завершение игровой сессии для админа ${telegramId}`,
+				);
+				return;
+			}
+
 			// Находим активную сессию пользователя
 			const activeSession = await prisma.gameSession.findFirst({
 				where: {
@@ -125,21 +151,35 @@ export class AnalyticsService {
 	}
 
 	/**
-	 * Получает общую статистику
+	 * Получает общую статистику (исключая админов)
 	 */
 	static async getStats(): Promise<AnalyticsStats> {
 		try {
-			// Общее количество уникальных пользователей
-			const totalUsers = await prisma.user.count();
-
-			// Общее количество запусков приложения
-			const totalAppStarts = await prisma.userEvent.count({
-				where: { eventType: EventType.APP_START },
+			// Общее количество уникальных пользователей (без админов)
+			const totalUsers = await prisma.user.count({
+				where: { role: 'user' },
 			});
 
-			// Общее количество завершенных игр
+			// Общее количество запусков приложения (от обычных пользователей)
+			const totalAppStarts = await prisma.userEvent.count({
+				where: {
+					eventType: EventType.APP_START,
+					// Исключаем админов через join с таблицей users
+					User: {
+						role: 'user',
+					},
+				},
+			});
+
+			// Общее количество завершенных игр (от обычных пользователей)
 			const totalGameCompletions = await prisma.gameSession.count({
-				where: { isCompleted: true },
+				where: {
+					isCompleted: true,
+					// Исключаем админов через join с таблицей users
+					User: {
+						role: 'user',
+					},
+				},
 			});
 
 			// Конверсия
@@ -154,6 +194,7 @@ export class AnalyticsService {
 
 			const usersToday = await prisma.user.count({
 				where: {
+					role: 'user',
 					createdAt: {
 						gte: todayStart,
 						lte: todayEnd,
@@ -164,6 +205,9 @@ export class AnalyticsService {
 			const appStartsToday = await prisma.userEvent.count({
 				where: {
 					eventType: EventType.APP_START,
+					User: {
+						role: 'user',
+					},
 					createdAt: {
 						gte: todayStart,
 						lte: todayEnd,
@@ -174,6 +218,9 @@ export class AnalyticsService {
 			const gameCompletionsToday = await prisma.gameSession.count({
 				where: {
 					isCompleted: true,
+					User: {
+						role: 'user',
+					},
 					completedAt: {
 						gte: todayStart,
 						lte: todayEnd,
@@ -202,7 +249,7 @@ export class AnalyticsService {
 	}
 
 	/**
-	 * Получает детальную статистику по периодам
+	 * Получает детальную статистику по периодам (исключая админов)
 	 */
 	static async getDetailedStats(days: number = 7): Promise<any> {
 		try {
@@ -210,22 +257,25 @@ export class AnalyticsService {
 			const startDate = new Date();
 			startDate.setDate(startDate.getDate() - days);
 
-			// Статистика по дням
+			// Статистика по дням (исключая админов)
 			const dailyStatsRaw = await prisma.$queryRaw`
 				SELECT 
-					DATE(created_at) as date,
-					COUNT(CASE WHEN event_type = 'app_start' THEN 1 END) as app_starts,
-					COUNT(CASE WHEN event_type = 'game_completed' THEN 1 END) as game_completions
-				FROM user_events 
-				WHERE created_at >= ${startDate} AND created_at <= ${endDate}
-				GROUP BY DATE(created_at)
-				ORDER BY DATE(created_at) DESC
+					DATE(ue.created_at) as date,
+					COUNT(CASE WHEN ue.event_type = 'app_start' THEN 1 END) as app_starts,
+					COUNT(CASE WHEN ue.event_type = 'game_completed' THEN 1 END) as game_completions
+				FROM user_events ue
+				INNER JOIN users u ON ue.telegram_id = u.telegram_id
+				WHERE ue.created_at >= ${startDate} 
+					AND ue.created_at <= ${endDate}
+					AND u.role = 'user'
+				GROUP BY DATE(ue.created_at)
+				ORDER BY DATE(ue.created_at) DESC
 			`;
 
 			// Преобразуем BigInt в Number и обрабатываем даты
 			const dailyStats = convertBigIntToNumber(dailyStatsRaw);
 
-			// Топ клубов по количеству игр
+			// Топ клубов по количеству игр (исключая админов)
 			const topClubsRaw = await prisma.gameSession.groupBy({
 				by: ['clubId'],
 				where: {
@@ -236,6 +286,10 @@ export class AnalyticsService {
 					completedAt: {
 						gte: startDate,
 						lte: endDate,
+					},
+					// Исключаем админов
+					User: {
+						role: 'user',
 					},
 				},
 				_count: {
