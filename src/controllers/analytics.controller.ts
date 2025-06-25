@@ -170,7 +170,6 @@ export const forceCompleteAllSessions = async (
 			telegramId,
 		);
 
-
 		res.json({
 			ok: true,
 			completedSessions: completedCount,
@@ -311,11 +310,27 @@ export const resetAnalytics = async (
 				deletedUsers: result.deletedUsers,
 			},
 		});
-	} catch (error) {
+	} catch (error: any) {
 		console.error('Ошибка при сбросе аналитики:', error);
+
+		// Более детальная информация об ошибке
+		const errorMessage = error.message || 'Неизвестная ошибка';
+		const errorCode = error.code || 'UNKNOWN';
+		const errorMeta = error.meta || {};
+
+		console.error(
+			`Детали ошибки: код ${errorCode}, сообщение: ${errorMessage}, мета:`,
+			errorMeta,
+		);
+
 		res.status(500).json({
 			ok: false,
 			error: 'Ошибка при сбросе аналитики',
+			details: {
+				message: errorMessage,
+				code: errorCode,
+				...(Object.keys(errorMeta).length > 0 ? { meta: errorMeta } : {}),
+			},
 		});
 	}
 };
