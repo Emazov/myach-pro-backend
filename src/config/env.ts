@@ -54,7 +54,7 @@ export const config = {
 	telegram: {
 		botToken: getEnvVar('TELEGRAM_BOT_TOKEN'),
 		adminId: getEnvVar('TELEGRAM_ADMIN_ID'),
-		botUsername: getEnvVar('TELEGRAM_BOT_USERNAME', 'myach_pro_bot'),
+		botUsername: getEnvVar('TELEGRAM_BOT_USERNAME', 'emazov_myach_pro_bot'),
 	},
 	webApp: {
 		url: getEnvVar('WEB_APP_URL'),

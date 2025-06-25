@@ -97,7 +97,7 @@ export class ImageGenerationService {
 								.map(
 									(player, index) => `
             <div class="player-item">
-              <span class="player-number">${index + 1}.</span>
+              <span class="player-number">${index + 1}</span>
               <span class="player-name">${player.name}</span>
             </div>
           `,
@@ -274,11 +274,7 @@ export class ImageGenerationService {
         </style>
       </head>
       <body>
-        <div class="container">
-          <div class="header">
-            <h1 class="main-title">РЕЗУЛЬТАТ</h1>
-          </div>
-          
+        <div class="container">       
           <div class="content">
             <div class="tier-list-header">
               <h2 class="tier-list-title">ТИР-ЛИСТ</h2>
@@ -298,7 +294,7 @@ export class ImageGenerationService {
           </div>
           
           <div class="footer">
-            ⚽ Создано в @myach_pro_bot
+            @${config.telegram.botUsername}
           </div>
         </div>
       </body>
