@@ -8,8 +8,25 @@ class RedisService {
 	private client: Redis;
 
 	constructor() {
-		// Используем URL для подключения к Redis
-		this.client = new Redis(config.redis.url);
+		// Проверяем, содержит ли URL строку redis.railway.internal
+		const redisUrl = config.redis.url;
+
+		if (redisUrl.includes('redis.railway.internal')) {
+			// Для Railway добавляем параметр family=0 для поддержки IPv6
+			const url = new URL(redisUrl);
+
+			// Создаем клиент с явными параметрами для поддержки IPv6
+			this.client = new Redis({
+				host: url.hostname,
+				port: parseInt(url.port || '6379', 10),
+				username: url.username || undefined,
+				password: url.password || undefined,
+				family: 0, // Включаем поддержку dual stack (IPv4 и IPv6)
+			});
+		} else {
+			// Для других случаев используем обычный URL
+			this.client = new Redis(redisUrl);
+		}
 
 		this.client.on('error', (err) => {
 			console.error('Ошибка Redis:', err);
