@@ -3,6 +3,8 @@ import chromium from '@sparticuz/chromium';
 import { config } from '../config/env';
 import { prisma } from '../prisma';
 import { StorageService } from './storage.service';
+import fs from 'fs';
+import path from 'path';
 
 // Обновленная структура данных для генерации изображения
 export interface ShareImageData {
@@ -61,6 +63,97 @@ export class ImageGenerationService {
 			ImageGenerationService.instance = new ImageGenerationService();
 		}
 		return ImageGenerationService.instance;
+	}
+
+	/**
+	 * Загружает шрифт в формате base64 для встраивания в HTML
+	 */
+	private loadFontAsBase64(fontFileName: string): string {
+		try {
+			// Путь к шрифтам относительно корня проекта
+			const fontPath = path.join(
+				process.cwd(),
+				'assets',
+				'fonts',
+				fontFileName,
+			);
+
+			// Проверяем существование файла
+			if (!fs.existsSync(fontPath)) {
+				console.warn(`Шрифт не найден: ${fontPath}`);
+				return '';
+			}
+
+			// Читаем и кодируем шрифт в base64
+			const fontBuffer = fs.readFileSync(fontPath);
+			return fontBuffer.toString('base64');
+		} catch (error) {
+			console.error('Ошибка при загрузке шрифта:', error);
+			return '';
+		}
+	}
+
+	/**
+	 * Загружает изображение в формате base64 для встраивания в HTML
+	 */
+	private loadImageAsBase64(imageFileName: string): string {
+		try {
+			// Путь к изображениям относительно корня проекта
+			const imagePath = path.join(process.cwd(), 'assets', imageFileName);
+
+			// Проверяем существование файла
+			if (!fs.existsSync(imagePath)) {
+				console.warn(`Изображение не найдено: ${imagePath}`);
+				return '';
+			}
+
+			// Читаем и кодируем изображение в base64
+			const imageBuffer = fs.readFileSync(imagePath);
+			const extension = path.extname(imageFileName).toLowerCase();
+
+			// Определяем MIME-тип
+			let mimeType = 'image/jpeg';
+			if (extension === '.png') mimeType = 'image/png';
+			else if (extension === '.jpg' || extension === '.jpeg')
+				mimeType = 'image/jpeg';
+			else if (extension === '.gif') mimeType = 'image/gif';
+			else if (extension === '.webp') mimeType = 'image/webp';
+
+			return `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
+		} catch (error) {
+			console.error('Ошибка при загрузке изображения:', error);
+			return '';
+		}
+	}
+
+	/**
+	 * Генерирует CSS для встраивания шрифтов
+	 */
+	private generateFontFaces(): string {
+		// Список шрифтов для загрузки
+		const fonts = [
+			{ file: 'Montserrat-Regular.ttf', weight: 400, style: 'normal' },
+			{ file: 'Montserrat-Bold.ttf', weight: 700, style: 'normal' },
+		];
+
+		// Генерируем CSS для каждого шрифта
+		return fonts
+			.map((font) => {
+				const base64Font = this.loadFontAsBase64(font.file);
+
+				if (!base64Font) return '';
+
+				return `
+      @font-face {
+        font-family: 'Montserrat';
+        src: url(data:font/truetype;charset=utf-8;base64,${base64Font}) format('truetype');
+        font-weight: ${font.weight};
+        font-style: ${font.style};
+        font-display: swap;
+      }
+    `;
+			})
+			.join('\n');
 	}
 
 	/**
@@ -173,6 +266,18 @@ export class ImageGenerationService {
 			data,
 		);
 
+		let fontFaces = '';
+		try {
+			fontFaces = this.generateFontFaces();
+		} catch (error) {
+			console.error('Ошибка при загрузке шрифтов:', error);
+			// Продолжаем работу без локальных шрифтов
+		}
+
+		// Загружаем локальные изображения в base64
+		const backgroundImage = this.loadImageAsBase64('main_bg.jpg');
+		const mainLogo = this.loadImageAsBase64('main_logo.png');
+
 		const playersHTML = data.categories
 			.map((category) => {
 				const playerIds = data.categorizedPlayerIds[category.name] || [];
@@ -193,15 +298,11 @@ export class ImageGenerationService {
 										createPlayerAvatarPlaceholder(player.name);
 
 									return `
-            <div class="player-item">
               <img src="${playerAvatar}" alt="${
 										player.name
 									}" class="player-avatar" onerror="this.src='${createPlayerAvatarPlaceholder(
 										player.name,
 									)}'" />
-              <span class="player-number">${index + 1}</span>
-              <span class="player-name">${player.name}</span>
-            </div>
           `;
 								})
 								.filter((html) => html !== '') // Убираем пустые строки
@@ -209,18 +310,14 @@ export class ImageGenerationService {
 						: '<div class="empty-category">— Пусто</div>';
 
 				return `
-        <div class="category-section">
-          <div class="category-header" style="background-color: ${
-						category.color
-					}">
-            <span class="category-title">${category.name.toUpperCase()}</span>
-            <span class="category-count">(${playerIds.length}/${
-					category.slots
-				})</span>
-          </div>
-          <div class="category-players">
-            ${playersListHTML}
-          </div>
+        <div class="category-section" style="background-color: ${
+					category.color
+				}">
+        	<span class="category-title">${category.name.toUpperCase()}</span>
+        
+          	<div class="category-players">
+            	${playersListHTML}
+          	</div>
         </div>
       `;
 			})
@@ -234,171 +331,125 @@ export class ImageGenerationService {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Результаты игры</title>
         <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          
-          body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(180deg, #EC3381 0%, #FF6B9D 100%);
-            width: 800px;
-            min-height: 1000px;
-            color: white;
-            padding: 40px;
-          }
-          
-          .container {
-            width: 100%;
-            height: 100%;
-          }
-          
-          .header {
-            text-align: center;
-            margin-bottom: 60px;
-          }
-          
-          .logo {
-            width: 64px;
-            height: 64px;
-            margin: 0 auto 20px;
-            display: block;
-          }
-          
-          .main-title {
-            font-size: 48px;
-            font-weight: bold;
-            color: white;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-          }
-          
-          .content {
-            background: #ffffff;
-            border-radius: 16px;
-            padding: 40px;
-            color: #333;
-          }
-          
-          .tier-list-header {
-            text-align: center;
-            margin-bottom: 40px;
-          }
-          
-          .tier-list-title {
-            font-size: 28px;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 16px;
-          }
-          
-          .club-info {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-          }
-          
-          .club-logo {
-            width: 32px;
-            height: 32px;
-            border-radius: 4px;
-          }
-          
-          .club-name {
-            font-size: 24px;
-            font-weight: 600;
-            color: #333;
-          }
-          
-          .category-section {
-            margin-bottom: 24px;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-          }
-          
-          .category-header {
-            padding: 16px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            color: white;
-            font-weight: bold;
-          }
-          
-          .category-title {
-            font-size: 20px;
-          }
-          
-          .category-count {
-            font-size: 16px;
-            opacity: 0.9;
-          }
-          
-          .category-players {
-            background: #f8f9fa;
-            padding: 16px 20px;
-            min-height: 60px;
-          }
-          
-          .player-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 8px;
-            font-size: 18px;
-          }
-          
-          .player-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            object-fit: cover;
-            flex-shrink: 0;
-            border: 2px solid #e0e0e0;
-          }
-          
-          .player-number {
-            font-weight: 600;
-            color: #666;
-            min-width: 24px;
-          }
-          
-          .player-name {
-            color: #333;
-            flex: 1;
-          }
-          
-          .empty-category {
-            color: #999;
-            font-style: italic;
-            font-size: 16px;
-          }
-          
-          .footer {
-            text-align: center;
-            margin-top: 40px;
-            font-size: 20px;
-            color: white;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">       
-          <div class="content">
-            <div class="tier-list-header">
-              <h2 class="tier-list-title">ТИР-ЛИСТ</h2>
-              <div class="club-info">
-                ${
-									clubLogoUrl
-										? `<img src="${clubLogoUrl}" alt="Логотип" class="club-logo" />`
-										: ''
-								}
+		${fontFaces}
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		body {
+			font-family: 'Montserrat', sans-serif;
+			${
+				backgroundImage
+					? `background: url('${backgroundImage}') no-repeat center center fixed;`
+					: 'background: #1a1a1a;'
+			}
+			max-width: 800px;
+			color: white;
+			padding: 0 30px 30px;
+
+		}
+
+		.container {
+			width: 100%;
+			height: 100%;
+		}
+
+		.container-logo {
+			display: flex;
+			justify-content: center;
+		}
+
+		.main-logo {
+			width: 164px;
+			object-fit: cover;
+		}
+
+		.content {
+			background: #ffffff;
+			border-radius: 16px;
+			padding: 20px;
+		}
+
+		.tier-list-header {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 12px;
+			margin-bottom: 20px;
+		}
+
+		.club-logo {
+			width: 60px;
+		}
+
+		.club-name {
+			font-size: 40px;
+			font-weight: bold;
+			color: #000;
+		}
+
+		.category-section {
+			margin-bottom: 20px;
+			border-radius: 15px;
+			overflow: hidden;
+			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+			padding: 5px 5px 5px 20px;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			color: white;
+			font-weight: bold;
+		}
+
+		.category-title {
+			font-size: 34px;
+		}
+
+		.category-players {
+			display: grid;
+			grid-template-columns: repeat(6, minmax(0, 1fr));
+			gap: 5px
+		}
+
+		.player-avatar {
+			width: 70px;
+			border-radius: 10px;
+			object-fit: cover;
+		}
+
+		.empty-category {
+			color: #999;
+			font-style: italic;
+			font-size: 16px;
+		}
+
+		.footer {
+			text-align: center;
+			margin-top: 30px;
+			font-size: 20px;
+			font-weight: regular;
+			color: white;
+			text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+		}
+	</style>
+    </head>
+    	<body>
+        	<div class="container">       
+				<div class='container-logo'>
+					${mainLogo ? `<img class='main-logo' src="${mainLogo}" alt="main_logo">` : ''}
+				</div>
+          	
+				<div class="content">
+            		<div class="tier-list-header">
+                        ${
+													clubLogoUrl
+														? `<img src="${clubLogoUrl}" alt="Логотип" class="club-logo" />`
+														: ''
+												}
                 <span class="club-name">${club.name}</span>
-              </div>
             </div>
             
             <div class="categories">
