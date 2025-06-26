@@ -365,6 +365,7 @@ export class ImageGenerationService {
 			}
 			background-size: cover;
 			max-width: 600px;
+			height: 100vh;
 			color: white;
 			padding: 20px;
 
@@ -372,6 +373,11 @@ export class ImageGenerationService {
 
 		.container {
 			width: 100%;
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			align-items: center;
 		}
 
 		.container-logo {
@@ -388,6 +394,7 @@ export class ImageGenerationService {
 			background: #ffffff;
 			border-radius: 25px;
 			padding: 10px;
+			width: 100%;
 		}
 
 		.tier-list-header {
@@ -444,12 +451,7 @@ export class ImageGenerationService {
 		}
 
 		.footer {
-			text-align: center;
-			margin-top: 20px;
-			font-size: 20px;
-			font-weight: regular;
-			color: white;
-			text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+			height: 100px;
 		}
 	</style>
     </head>
@@ -466,18 +468,16 @@ export class ImageGenerationService {
 														? `<img src="${clubLogoUrl}" alt="Логотип" class="club-logo" />`
 														: ''
 												}
-                <span class="club-name">${club.name}</span>
-            </div>
+                		<span class="club-name">${club.name}</span>
+            		</div>
             
-            <div class="categories">
-              ${playersHTML}
-            </div>
-          </div>
+            		<div class="categories">
+              			${playersHTML}
+            		</div>
+          		</div>
           
-          <div class="footer">
-            @${config.telegram.botUsername}
-          </div>
-        </div>
+          		<div class="footer"></div>
+        	</div>
       </body>
       </html>
     `;
