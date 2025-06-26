@@ -360,12 +360,13 @@ export class ImageGenerationService {
 			font-family: 'Montserrat', sans-serif;
 			${
 				backgroundImage
-					? `background: url('${backgroundImage}') no-repeat center center fixed;`
+					? `background: url('${backgroundImage}') no-repeat center center;`
 					: 'background: #1a1a1a;'
 			}
-			max-width: 800px;
+			background-size: cover;
+			max-width: 600px;
 			color: white;
-			padding: 30px 20px 30px 20px;
+			padding: 20px 15px;
 
 		}
 
@@ -381,7 +382,7 @@ export class ImageGenerationService {
 		}
 
 		.main-logo {
-			width: 164px;
+			width: 120px;
 			object-fit: cover;
 		}
 
@@ -404,7 +405,7 @@ export class ImageGenerationService {
 		}
 
 		.club-name {
-			font-size: 40px;
+			font-size: 32px;
 			font-weight: bold;
 			color: #000;
 		}
@@ -424,7 +425,7 @@ export class ImageGenerationService {
 		}
 
 		.category-title {
-			font-size: 34px;
+			font-size: 28px;
 		}
 
 		.category-players {
@@ -434,8 +435,8 @@ export class ImageGenerationService {
 		}
 
 		.player-avatar {
-			width: 70px;
-			border-radius: 10px;
+			width: 60px;
+			border-radius: 8px;
 			object-fit: cover;
 		}
 
@@ -498,8 +499,8 @@ export class ImageGenerationService {
 			// Генерируем HTML
 			const html = await this.generateHTML(data);
 
-			// Генерируем изображение в отдельном Worker потоке
-			const imageBuffer = await generateImageInWorker(html, 800, 1000);
+			// Генерируем изображение в отдельном Worker потоке (оптимизированный размер)
+			const imageBuffer = await generateImageInWorker(html, 600, 800);
 
 			return {
 				imageBuffer,

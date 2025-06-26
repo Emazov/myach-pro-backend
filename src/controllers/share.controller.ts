@@ -6,6 +6,9 @@ import {
 import TelegramBot from 'node-telegram-bot-api';
 import { initDataUtils } from '../utils/initDataUtils';
 import { config } from '../config/env';
+import { Readable } from 'stream';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Контроллер для обработки функций шаринга
@@ -64,24 +67,85 @@ export class ShareController {
 			const { imageBuffer, club } =
 				await imageGenerationService.generateResultsImage(imageData);
 
+			// Проверяем размер изображения
+			const imageSizeMB = imageBuffer.length / (1024 * 1024);
+			console.log(
+				`Размер сгенерированного изображения: ${imageSizeMB.toFixed(2)} MB`,
+			);
+
+			if (imageSizeMB > 10) {
+				console.warn(
+					'Изображение слишком большое, может возникнуть ошибка при отправке',
+				);
+			}
+
 			// Отправляем изображение пользователю в Telegram
 			const caption = `🏆 ТИР-ЛИСТ "${club.name.toUpperCase()}"\n\n⚽ Создано в @${
 				config.telegram.botUsername
 			}`;
 
-			await this.bot.sendPhoto(userId, imageBuffer, {
-				caption,
-				reply_markup: {
-					inline_keyboard: [
-						[
-							{
-								text: 'Открыть Тир Лист',
-								web_app: { url: config.webApp.url },
-							},
+			try {
+				// Пытаемся отправить через Stream (рекомендуемый способ)
+				const imageStream = new Readable({
+					read() {},
+				});
+				imageStream.push(imageBuffer);
+				imageStream.push(null);
+
+				await this.bot.sendPhoto(userId, imageStream, {
+					caption,
+					reply_markup: {
+						inline_keyboard: [
+							[
+								{
+									text: 'Открыть Тир Лист',
+									web_app: { url: config.webApp.url },
+								},
+							],
 						],
-					],
-				},
-			});
+					},
+				});
+			} catch (streamError) {
+				console.warn(
+					'Не удалось отправить через Stream, пробуем через временный файл',
+				);
+
+				// Fallback: создаем временный файл
+				const tempFileName = `tier-list-${userId}-${Date.now()}.jpg`;
+				const tempFilePath = path.join(
+					process.cwd(),
+					'tmp',
+					'uploads',
+					tempFileName,
+				);
+
+				// Записываем изображение во временный файл
+				await fs.promises.writeFile(tempFilePath, imageBuffer);
+
+				try {
+					// Отправляем через файл
+					await this.bot.sendPhoto(userId, tempFilePath, {
+						caption,
+						reply_markup: {
+							inline_keyboard: [
+								[
+									{
+										text: 'Открыть Тир Лист',
+										web_app: { url: config.webApp.url },
+									},
+								],
+							],
+						},
+					});
+				} finally {
+					// Удаляем временный файл
+					try {
+						await fs.promises.unlink(tempFilePath);
+					} catch (unlinkError) {
+						console.warn('Не удалось удалить временный файл:', unlinkError);
+					}
+				}
+			}
 
 			// Закрываем веб-приложение
 			res.json({

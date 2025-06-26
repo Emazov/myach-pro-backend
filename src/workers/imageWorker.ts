@@ -79,11 +79,12 @@ if (!isMainThread && parentPort) {
 					// Загружаем HTML
 					await page.setContent(html, { waitUntil: 'networkidle0' });
 
-					// Генерируем скриншот
+					// Генерируем скриншот с оптимизированными настройками
 					const screenshot = await page.screenshot({
 						type: 'jpeg',
 						fullPage: true,
-						quality: 95,
+						quality: 85, // Снижаем качество для уменьшения размера
+						optimizeForSpeed: true,
 					});
 
 					parentPort!.postMessage({
