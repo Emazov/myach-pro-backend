@@ -452,6 +452,14 @@ export class ImageGenerationService {
 
 		.footer {
 			height: 100px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			font-size: 20px;
+			font-weight: regular;
+			color: white;
+			text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
 		}
 	</style>
     </head>
@@ -476,7 +484,9 @@ export class ImageGenerationService {
             		</div>
           		</div>
           
-          		<div class="footer"></div>
+          		<div class="footer">
+					Собери свой тир лист - @${config.telegram.botUsername}
+				</div>
         	</div>
       </body>
       </html>
