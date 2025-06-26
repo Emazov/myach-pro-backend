@@ -61,12 +61,11 @@ export class ShareController {
 			};
 
 			// Генерируем изображение
-			const imageBuffer = await imageGenerationService.generateResultsImage(
-				imageData,
-			);
+			const { imageBuffer, club } =
+				await imageGenerationService.generateResultsImage(imageData);
 
 			// Отправляем изображение пользователю в Telegram
-			const caption = `🏆 ТИР-ЛИСТ "${shareData.clubName.toUpperCase()}"\n\n⚽ Создано в @${
+			const caption = `🏆 ТИР-ЛИСТ "${club.name.toUpperCase()}"\n\n⚽ Создано в @${
 				config.telegram.botUsername
 			}`;
 
@@ -118,7 +117,7 @@ export class ShareController {
 				clubId: shareData.clubId,
 			};
 
-			const imageBuffer = await imageGenerationService.generateResultsImage(
+			const { imageBuffer } = await imageGenerationService.generateResultsImage(
 				imageData,
 			);
 

@@ -418,10 +418,15 @@ export class ImageGenerationService {
 	/**
 	 * Генерирует изображение на основе данных (асинхронная версия)
 	 */
-	public async generateResultsImage(data: ShareImageData): Promise<Buffer> {
+	public async generateResultsImage(
+		data: ShareImageData,
+	): Promise<{ imageBuffer: Buffer; club: { name: string } }> {
 		// Выносим генерацию изображения в отдельный процесс для избежания блокировки
 		return new Promise(async (resolve, reject) => {
 			try {
+				// Сначала получаем данные клуба
+				const { club } = await this.getClubAndPlayersData(data);
+
 				const browser = await this.initBrowser();
 				const page = await browser.newPage();
 
@@ -440,7 +445,10 @@ export class ImageGenerationService {
 						quality: 95,
 					});
 
-					resolve(screenshot as Buffer);
+					resolve({
+						imageBuffer: screenshot as Buffer,
+						club: { name: club.name },
+					});
 				} finally {
 					await page.close();
 				}
