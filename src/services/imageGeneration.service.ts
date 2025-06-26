@@ -10,6 +10,42 @@ export interface ShareImageData {
 }
 
 /**
+ * Создает SVG плейсхолдер для аватара игрока
+ */
+function createPlayerAvatarPlaceholder(playerName: string): string {
+	const colors = [
+		'#FF6B6B',
+		'#4ECDC4',
+		'#45B7D1',
+		'#96CEB4',
+		'#FCEA2B',
+		'#FF9FF3',
+		'#54A0FF',
+		'#5F27CD',
+		'#00D2D3',
+		'#FF9F43',
+		'#6C5CE7',
+		'#A29BFE',
+		'#FD79A8',
+		'#74B9FF',
+		'#00B894',
+	];
+
+	// Генерируем цвет на основе имени игрока
+	let hash = 0;
+	for (let i = 0; i < playerName.length; i++) {
+		hash = playerName.charCodeAt(i) + ((hash << 5) - hash);
+	}
+	const color = colors[Math.abs(hash) % colors.length];
+
+	const initial = playerName.charAt(0).toUpperCase();
+
+	return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='${encodeURIComponent(
+		color,
+	)}'/%3E%3Ctext x='50%25' y='50%25' font-size='14' text-anchor='middle' dy='.3em' fill='white' font-family='Arial, sans-serif' font-weight='bold'%3E${initial}%3C/text%3E%3C/svg%3E`;
+}
+
+/**
  * Сервис для генерации изображений результатов игры
  */
 export class ImageGenerationService {
@@ -94,14 +130,24 @@ export class ImageGenerationService {
 				const playersListHTML =
 					players.length > 0
 						? players
-								.map(
-									(player, index) => `
+								.map((player, index) => {
+									// Определяем аватар игрока - используем img_url (клиент) или avatarUrl (сервер)
+									const avatarUrl = player.img_url || player.avatarUrl || '';
+									const playerAvatar =
+										avatarUrl || createPlayerAvatarPlaceholder(player.name);
+
+									return `
             <div class="player-item">
+              <img src="${playerAvatar}" alt="${
+										player.name
+									}" class="player-avatar" onerror="this.src='${createPlayerAvatarPlaceholder(
+										player.name,
+									)}'" />
               <span class="player-number">${index + 1}</span>
               <span class="player-name">${player.name}</span>
             </div>
-          `,
-								)
+          `;
+								})
 								.join('')
 						: '<div class="empty-category">— Пусто</div>';
 
@@ -243,9 +289,18 @@ export class ImageGenerationService {
           .player-item {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
             margin-bottom: 8px;
             font-size: 18px;
+          }
+          
+          .player-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+            border: 2px solid #e0e0e0;
           }
           
           .player-number {
@@ -256,6 +311,7 @@ export class ImageGenerationService {
           
           .player-name {
             color: #333;
+            flex: 1;
           }
           
           .empty-category {
