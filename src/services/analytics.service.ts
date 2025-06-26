@@ -36,9 +36,6 @@ export class AnalyticsService {
 			});
 
 			if (user?.role === 'admin') {
-				console.log(
-					`Пропускаем логирование события ${eventType} для админа ${telegramId}`,
-				);
 				return;
 			}
 
@@ -70,9 +67,6 @@ export class AnalyticsService {
 			});
 
 			if (user?.role === 'admin') {
-				console.log(
-					`Пропускаем создание игровой сессии для админа ${telegramId}`,
-				);
 				return null;
 			}
 
@@ -87,9 +81,6 @@ export class AnalyticsService {
 			if (activeSession) {
 				// НЕ завершаем предыдущую сессию автоматически
 				// Возвращаем ID существующей активной сессии
-				console.log(
-					`Найдена активная сессия для пользователя ${telegramId}: ${activeSession.id}`,
-				);
 				return activeSession.id;
 			}
 
@@ -155,10 +146,6 @@ export class AnalyticsService {
 				},
 			});
 
-			if (result.count > 0) {
-				console.log(`Истекло ${result.count} старых игровых сессий`);
-			}
-
 			return result.count;
 		} catch (error) {
 			console.error('Ошибка при истечении старых сессий:', error);
@@ -178,7 +165,6 @@ export class AnalyticsService {
 			});
 
 			if (user?.role === 'admin') {
-				console.log(`Пропускаем завершение сессий для админа ${telegramId}`);
 				return 0;
 			}
 
@@ -193,9 +179,6 @@ export class AnalyticsService {
 				},
 			});
 
-			console.log(
-				`Принудительно завершено ${result.count} сессий для пользователя ${telegramId}`,
-			);
 			return result.count;
 		} catch (error) {
 			console.error('Ошибка при принудительном завершении сессий:', error);
@@ -215,9 +198,6 @@ export class AnalyticsService {
 			});
 
 			if (user?.role === 'admin') {
-				console.log(
-					`Пропускаем получение активной сессии для админа ${telegramId}`,
-				);
 				return null;
 			}
 
@@ -250,9 +230,6 @@ export class AnalyticsService {
 			});
 
 			if (user?.role === 'admin') {
-				console.log(
-					`Пропускаем завершение игровой сессии для админа ${telegramId}`,
-				);
 				return;
 			}
 
@@ -476,8 +453,6 @@ export class AnalyticsService {
 		deletedUsers: number;
 	}> {
 		try {
-			console.log('Начинаем сброс аналитики...');
-
 			// Подсчитываем количество записей перед удалением для отчета
 			const userEventsCount = await prisma.userEvent.count();
 			const gameSessionsCount = await prisma.gameSession.count();

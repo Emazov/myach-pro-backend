@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger';
 
 /**
  * Middleware для отслеживания времени выполнения запросов
@@ -16,20 +17,14 @@ export const requestTimer = (
 		// Вычисляем время выполнения
 		const duration = Date.now() - start;
 
-		// Логируем информацию о запросе
-		console.log(
-			`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} ${
-				res.statusCode
-			} ${duration}ms`,
-		);
-
 		// Добавляем информацию о времени выполнения в заголовки ответа
 		res.setHeader('X-Response-Time', `${duration}ms`);
 
 		// Если запрос выполняется долго, логируем предупреждение
 		if (duration > 500) {
-			console.warn(
+			logger.warn(
 				`Медленный запрос: ${req.method} ${req.originalUrl} - ${duration}ms`,
+				'PERFORMANCE',
 			);
 		}
 	});

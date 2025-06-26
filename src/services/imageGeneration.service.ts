@@ -82,8 +82,6 @@ export class ImageGenerationService {
 			return;
 		}
 
-		console.log('🔄 Инициализация ресурсов ImageGenerationService...');
-
 		try {
 			// Загружаем шрифты параллельно
 			const fontPromises = [
@@ -101,7 +99,6 @@ export class ImageGenerationService {
 			await Promise.all([...fontPromises, ...imagePromises]);
 
 			this.resourcesCache.isInitialized = true;
-			console.log('✅ Ресурсы ImageGenerationService инициализированы');
 		} catch (error) {
 			console.error('❌ Ошибка при инициализации ресурсов:', error);
 			// Продолжаем работу даже с ошибками
@@ -516,7 +513,6 @@ export class ImageGenerationService {
 		this.resourcesCache.fonts.clear();
 		this.resourcesCache.images.clear();
 		this.resourcesCache.isInitialized = false;
-		console.log('🧹 Кэш ImageGenerationService очищен');
 	}
 }
 

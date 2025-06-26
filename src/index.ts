@@ -8,6 +8,7 @@ import { TelegramBotService } from './bot/telegramBot';
 import { redisService } from './services/redis.service';
 import { AnalyticsService } from './services/analytics.service';
 import { imageGenerationService } from './services/imageGeneration.service';
+import { logger } from './utils/logger';
 
 import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
@@ -16,6 +17,7 @@ import adminRoutes from './routes/admin';
 import analyticsRoutes from './routes/analytics';
 import uploadRoutes from './routes/upload';
 import shareRoutes from './routes/share';
+import healthRoutes from './routes/health';
 import { errorHandler } from './utils/errorHandler';
 
 /**
@@ -42,6 +44,9 @@ const initApp = () => {
 	app.use(express.json({ limit: '10mb' }));
 	app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+	// Health check маршруты (без префикса /api для удобства мониторинга)
+	app.use('/health', healthRoutes);
+
 	// Подключаем маршруты API
 	app.use('/api/auth', authRoutes);
 	app.use('/api/clubs', clubsRoutes);
@@ -62,25 +67,29 @@ const initApp = () => {
 		try {
 			const expiredCount = await AnalyticsService.expireOldSessions(24);
 			if (expiredCount > 0) {
-				console.log(
+				logger.info(
 					`Автоматически истекло ${expiredCount} старых игровых сессий`,
 				);
 			}
 		} catch (error) {
-			console.error('Ошибка при автоматической очистке старых сессий:', error);
+			logger.error(
+				'Ошибка при автоматической очистке старых сессий',
+				'CLEANUP',
+				error,
+			);
 		}
 	}, 30 * 60 * 1000); // 30 минут
 
 	// Очищаем интервал при выключении приложения
 	process.on('SIGINT', async () => {
-		console.log('Выключение приложения...');
+		logger.shutdown('Получен сигнал SIGINT, завершение работы...');
 		clearInterval(cleanupInterval);
 		await imageGenerationService.cleanup();
 		process.exit(0);
 	});
 
 	process.on('SIGTERM', async () => {
-		console.log('Выключение приложения...');
+		logger.shutdown('Получен сигнал SIGTERM, завершение работы...');
 		clearInterval(cleanupInterval);
 		await imageGenerationService.cleanup();
 		process.exit(0);
@@ -88,16 +97,21 @@ const initApp = () => {
 
 	// Запускаем сервер
 	app.listen(config.port, async () => {
-		console.log(`Сервер запущен на порту ${config.port}`);
-		console.log(
+		logger.startup(`Сервер запущен на порту ${config.port}`);
+		logger.info(
 			'Периодическая очистка старых игровых сессий запущена (каждые 30 минут)',
 		);
 
 		// Инициализируем ресурсы для генерации изображений
 		try {
 			await imageGenerationService.initializeResources();
+			logger.info('ImageGenerationService инициализирован');
 		} catch (error) {
-			console.error('Ошибка при инициализации ImageGenerationService:', error);
+			logger.error(
+				'Ошибка при инициализации ImageGenerationService',
+				'STARTUP',
+				error,
+			);
 		}
 	});
 
@@ -114,6 +128,6 @@ const initApp = () => {
 try {
 	initApp();
 } catch (error) {
-	console.error('Ошибка при запуске приложения:', error);
+	logger.error('Критическая ошибка при запуске приложения', 'STARTUP', error);
 	process.exit(1);
 }

@@ -18,13 +18,11 @@ const getEnvVar = (key: string, defaultValue?: string): string => {
 const getRedisUrl = (): string => {
 	// Сначала проверяем наличие публичного URL для локальной разработки
 	if (process.env.REDIS_PUBLIC_URL) {
-		console.log('Используем REDIS_PUBLIC_URL для подключения к Redis');
 		return process.env.REDIS_PUBLIC_URL;
 	}
 
 	// Проверяем наличие основного URL
 	if (process.env.REDIS_URL) {
-		console.log('Используем REDIS_URL для подключения к Redis');
 		return process.env.REDIS_URL;
 	}
 
@@ -35,14 +33,11 @@ const getRedisUrl = (): string => {
 			: '';
 		const user = process.env.REDISUSER ? `${process.env.REDISUSER}:` : '';
 		const url = `redis://${user}${password}${process.env.REDISHOST}:${process.env.REDISPORT}`;
-		console.log(
-			'Используем переменные REDISHOST/REDISPORT для подключения к Redis',
-		);
 		return url;
 	}
 
 	// Если нет ни одной переменной для Redis, возвращаем локальный URL
-	console.log(
+	console.warn(
 		'Не найдены переменные окружения для Redis, используем локальный URL',
 	);
 	return 'redis://localhost:6379';

@@ -33,7 +33,7 @@ class RedisService {
 		});
 
 		this.client.on('connect', () => {
-			console.log('Успешное подключение к Redis');
+			// Подключение к Redis
 		});
 	}
 

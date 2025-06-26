@@ -98,7 +98,7 @@ export class ClusterService {
 
 		// Обработка отключения worker
 		worker.on('disconnect', () => {
-			console.log(`Worker ${worker.process.pid} отключен`);
+			console.warn(`Worker ${worker.process.pid} отключен`);
 		});
 	}
 
@@ -161,8 +161,6 @@ export class ClusterService {
 	 * Graceful shutdown всех процессов
 	 */
 	private shutdown(): void {
-		console.log('Завершение работы кластера...');
-
 		// Отправляем сигнал завершения всем worker'ам
 		this.workers.forEach((worker) => {
 			worker.kill('SIGTERM');
@@ -170,7 +168,6 @@ export class ClusterService {
 
 		// Ждем завершения worker'ов
 		setTimeout(() => {
-			console.log('Принудительное завершение master процесса');
 			process.exit(0);
 		}, 10000); // 10 секунд на graceful shutdown
 	}
