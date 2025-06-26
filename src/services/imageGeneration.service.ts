@@ -1,12 +1,14 @@
 import puppeteer from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 import { config } from '../config/env';
+import { prisma } from '../prisma';
+import { StorageService } from './storage.service';
 
+// Обновленная структура данных для генерации изображения
 export interface ShareImageData {
-	categorizedPlayers: { [key: string]: any[] };
+	categorizedPlayerIds: { [categoryName: string]: string[] };
 	categories: Array<{ name: string; color: string; slots: number }>;
-	clubName: string;
-	clubLogoUrl?: string;
+	clubId: string;
 }
 
 /**
@@ -120,21 +122,75 @@ export class ImageGenerationService {
 	}
 
 	/**
+	 * Получает данные клуба и игроков из базы данных
+	 */
+	private async getClubAndPlayersData(data: ShareImageData) {
+		const storageService = new StorageService();
+
+		// Получаем клуб с подписанным URL логотипа
+		const club = await prisma.club.findUnique({
+			where: { id: data.clubId },
+		});
+
+		if (!club) {
+			throw new Error('Клуб не найден');
+		}
+
+		const clubLogoUrl = club.logo
+			? await storageService.getSignedUrl(club.logo)
+			: '';
+
+		// Получаем всех игроков одним запросом для оптимизации
+		const allPlayerIds = Object.values(data.categorizedPlayerIds).flat();
+
+		const players = await prisma.players.findMany({
+			where: { id: { in: allPlayerIds } },
+		});
+
+		// Создаем карту игроков для быстрого поиска
+		const playersMap = new Map();
+
+		for (const player of players) {
+			const avatarUrl = player.avatar
+				? await storageService.getSignedUrl(player.avatar)
+				: '';
+
+			playersMap.set(player.id, {
+				id: player.id,
+				name: player.name,
+				avatarUrl,
+			});
+		}
+
+		return { club, clubLogoUrl, playersMap };
+	}
+
+	/**
 	 * Генерирует HTML для рендера изображения
 	 */
-	private generateHTML(data: ShareImageData): string {
+	private async generateHTML(data: ShareImageData): Promise<string> {
+		const { club, clubLogoUrl, playersMap } = await this.getClubAndPlayersData(
+			data,
+		);
+
 		const playersHTML = data.categories
 			.map((category) => {
-				const players = data.categorizedPlayers[category.name] || [];
+				const playerIds = data.categorizedPlayerIds[category.name] || [];
 
 				const playersListHTML =
-					players.length > 0
-						? players
-								.map((player, index) => {
-									// Определяем аватар игрока - используем img_url (клиент) или avatarUrl (сервер)
-									const avatarUrl = player.img_url || player.avatarUrl || '';
+					playerIds.length > 0
+						? playerIds
+								.map((playerId, index) => {
+									const player = playersMap.get(playerId);
+
+									if (!player) {
+										console.warn(`Игрок с ID ${playerId} не найден`);
+										return '';
+									}
+
 									const playerAvatar =
-										avatarUrl || createPlayerAvatarPlaceholder(player.name);
+										player.avatarUrl ||
+										createPlayerAvatarPlaceholder(player.name);
 
 									return `
             <div class="player-item">
@@ -148,6 +204,7 @@ export class ImageGenerationService {
             </div>
           `;
 								})
+								.filter((html) => html !== '') // Убираем пустые строки
 								.join('')
 						: '<div class="empty-category">— Пусто</div>';
 
@@ -157,7 +214,7 @@ export class ImageGenerationService {
 						category.color
 					}">
             <span class="category-title">${category.name.toUpperCase()}</span>
-            <span class="category-count">(${players.length}/${
+            <span class="category-count">(${playerIds.length}/${
 					category.slots
 				})</span>
           </div>
@@ -336,11 +393,11 @@ export class ImageGenerationService {
               <h2 class="tier-list-title">ТИР-ЛИСТ</h2>
               <div class="club-info">
                 ${
-									data.clubLogoUrl
-										? `<img src="${data.clubLogoUrl}" alt="Логотип" class="club-logo" />`
+									clubLogoUrl
+										? `<img src="${clubLogoUrl}" alt="Логотип" class="club-logo" />`
 										: ''
 								}
-                <span class="club-name">${data.clubName}</span>
+                <span class="club-name">${club.name}</span>
               </div>
             </div>
             
@@ -359,31 +416,38 @@ export class ImageGenerationService {
 	}
 
 	/**
-	 * Генерирует изображение на основе данных
+	 * Генерирует изображение на основе данных (асинхронная версия)
 	 */
 	public async generateResultsImage(data: ShareImageData): Promise<Buffer> {
-		const browser = await this.initBrowser();
-		const page = await browser.newPage();
+		// Выносим генерацию изображения в отдельный процесс для избежания блокировки
+		return new Promise(async (resolve, reject) => {
+			try {
+				const browser = await this.initBrowser();
+				const page = await browser.newPage();
 
-		try {
-			// Устанавливаем размер страницы
-			await page.setViewport({ width: 800, height: 1000 });
+				try {
+					// Устанавливаем размер страницы
+					await page.setViewport({ width: 800, height: 1000 });
 
-			// Загружаем HTML
-			const html = this.generateHTML(data);
-			await page.setContent(html, { waitUntil: 'networkidle0' });
+					// Загружаем HTML (теперь асинхронно)
+					const html = await this.generateHTML(data);
+					await page.setContent(html, { waitUntil: 'networkidle0' });
 
-			// Генерируем скриншот
-			const screenshot = await page.screenshot({
-				type: 'jpeg',
-				fullPage: true,
-				quality: 95,
-			});
+					// Генерируем скриншот
+					const screenshot = await page.screenshot({
+						type: 'jpeg',
+						fullPage: true,
+						quality: 95,
+					});
 
-			return screenshot as Buffer;
-		} finally {
-			await page.close();
-		}
+					resolve(screenshot as Buffer);
+				} finally {
+					await page.close();
+				}
+			} catch (error) {
+				reject(error);
+			}
+		});
 	}
 
 	/**

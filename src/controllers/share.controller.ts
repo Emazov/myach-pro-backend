@@ -55,10 +55,9 @@ export class ShareController {
 
 			// Подготавливаем данные для генерации изображения
 			const imageData: ShareImageData = {
-				categorizedPlayers: shareData.categorizedPlayers,
+				categorizedPlayerIds: shareData.categorizedPlayerIds,
 				categories: shareData.categories,
-				clubName: shareData.clubName,
-				clubLogoUrl: shareData.clubLogoUrl,
+				clubId: shareData.clubId,
 			};
 
 			// Генерируем изображение
@@ -114,10 +113,9 @@ export class ShareController {
 			}
 
 			const imageData: ShareImageData = {
-				categorizedPlayers: shareData.categorizedPlayers,
+				categorizedPlayerIds: shareData.categorizedPlayerIds,
 				categories: shareData.categories,
-				clubName: shareData.clubName,
-				clubLogoUrl: shareData.clubLogoUrl,
+				clubId: shareData.clubId,
 			};
 
 			const imageBuffer = await imageGenerationService.generateResultsImage(
