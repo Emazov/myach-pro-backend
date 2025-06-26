@@ -366,7 +366,7 @@ export class ImageGenerationService {
 			background-size: cover;
 			max-width: 600px;
 			color: white;
-			padding: 20px 15px;
+			padding: 20px;
 
 		}
 
@@ -378,18 +378,17 @@ export class ImageGenerationService {
 		.container-logo {
 			display: flex;
 			justify-content: center;
-			margin-bottom: 20px;
 		}
 
 		.main-logo {
-			width: 120px;
+			width: 140px;
 			object-fit: cover;
 		}
 
 		.content {
 			background: #ffffff;
-			border-radius: 35px;
-			padding: 20px;
+			border-radius: 25px;
+			padding: 10px;
 		}
 
 		.tier-list-header {
@@ -397,11 +396,10 @@ export class ImageGenerationService {
 			align-items: center;
 			justify-content: center;
 			gap: 12px;
-			margin: 10px 0 30px;
 		}
 
 		.club-logo {
-			width: 60px;
+			width: 50px;
 		}
 
 		.club-name {
@@ -411,12 +409,12 @@ export class ImageGenerationService {
 		}
 
 		.category-section {
-			margin-top: 20px;
+			margin-top: 15px;
 			border-radius: 15px;
 			overflow: hidden;
 			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
-			padding: 5px 5px 5px 20px;
+			padding: 5px 5px 5px 10px;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
@@ -435,8 +433,8 @@ export class ImageGenerationService {
 		}
 
 		.player-avatar {
-			width: 60px;
-			border-radius: 8px;
+			width: 50px;
+			border-radius: 10px;
 			object-fit: cover;
 		}
 
@@ -448,7 +446,7 @@ export class ImageGenerationService {
 
 		.footer {
 			text-align: center;
-			margin-top: 40px;
+			margin-top: 20px;
 			font-size: 20px;
 			font-weight: regular;
 			color: white;
