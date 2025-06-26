@@ -1,8 +1,7 @@
-import puppeteer from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
 import { config } from '../config/env';
 import { prisma } from '../prisma';
 import { StorageService } from './storage.service';
+import { generateImageInWorker } from '../workers/imageWorker';
 import fs from 'fs';
 import path from 'path';
 
@@ -54,7 +53,17 @@ function createPlayerAvatarPlaceholder(playerName: string): string {
  */
 export class ImageGenerationService {
 	private static instance: ImageGenerationService;
-	private browser: any = null;
+
+	// Кэш для ресурсов
+	private resourcesCache: {
+		fonts: Map<string, string>;
+		images: Map<string, string>;
+		isInitialized: boolean;
+	} = {
+		fonts: new Map(),
+		images: new Map(),
+		isInitialized: false,
+	};
 
 	private constructor() {}
 
@@ -66,10 +75,50 @@ export class ImageGenerationService {
 	}
 
 	/**
-	 * Загружает шрифт в формате base64 для встраивания в HTML
+	 * Предварительно загружает все ресурсы в кэш
 	 */
-	private loadFontAsBase64(fontFileName: string): string {
+	public async initializeResources(): Promise<void> {
+		if (this.resourcesCache.isInitialized) {
+			return;
+		}
+
+		console.log('🔄 Инициализация ресурсов ImageGenerationService...');
+
 		try {
+			// Загружаем шрифты параллельно
+			const fontPromises = [
+				this.loadFontAsBase64('Montserrat-Regular.ttf'),
+				this.loadFontAsBase64('Montserrat-Bold.ttf'),
+			];
+
+			// Загружаем изображения параллельно
+			const imagePromises = [
+				this.loadImageAsBase64('main_bg.jpg'),
+				this.loadImageAsBase64('main_logo.png'),
+			];
+
+			// Ждем загрузки всех ресурсов
+			await Promise.all([...fontPromises, ...imagePromises]);
+
+			this.resourcesCache.isInitialized = true;
+			console.log('✅ Ресурсы ImageGenerationService инициализированы');
+		} catch (error) {
+			console.error('❌ Ошибка при инициализации ресурсов:', error);
+			// Продолжаем работу даже с ошибками
+			this.resourcesCache.isInitialized = true;
+		}
+	}
+
+	/**
+	 * Асинхронно загружает шрифт в формате base64 для встраивания в HTML
+	 */
+	private async loadFontAsBase64(fontFileName: string): Promise<string> {
+		try {
+			// Проверяем кэш
+			if (this.resourcesCache.fonts.has(fontFileName)) {
+				return this.resourcesCache.fonts.get(fontFileName)!;
+			}
+
 			// Путь к шрифтам относительно корня проекта
 			const fontPath = path.join(
 				process.cwd(),
@@ -78,37 +127,53 @@ export class ImageGenerationService {
 				fontFileName,
 			);
 
-			// Проверяем существование файла
-			if (!fs.existsSync(fontPath)) {
+			// Проверяем существование файла асинхронно
+			try {
+				await fs.promises.access(fontPath);
+			} catch {
 				console.warn(`Шрифт не найден: ${fontPath}`);
+				this.resourcesCache.fonts.set(fontFileName, '');
 				return '';
 			}
 
-			// Читаем и кодируем шрифт в base64
-			const fontBuffer = fs.readFileSync(fontPath);
-			return fontBuffer.toString('base64');
+			// Читаем и кодируем шрифт в base64 асинхронно
+			const fontBuffer = await fs.promises.readFile(fontPath);
+			const base64Font = fontBuffer.toString('base64');
+
+			// Кэшируем результат
+			this.resourcesCache.fonts.set(fontFileName, base64Font);
+			return base64Font;
 		} catch (error) {
 			console.error('Ошибка при загрузке шрифта:', error);
+			this.resourcesCache.fonts.set(fontFileName, '');
 			return '';
 		}
 	}
 
 	/**
-	 * Загружает изображение в формате base64 для встраивания в HTML
+	 * Асинхронно загружает изображение в формате base64 для встраивания в HTML
 	 */
-	private loadImageAsBase64(imageFileName: string): string {
+	private async loadImageAsBase64(imageFileName: string): Promise<string> {
 		try {
+			// Проверяем кэш
+			if (this.resourcesCache.images.has(imageFileName)) {
+				return this.resourcesCache.images.get(imageFileName)!;
+			}
+
 			// Путь к изображениям относительно корня проекта
 			const imagePath = path.join(process.cwd(), 'assets', imageFileName);
 
-			// Проверяем существование файла
-			if (!fs.existsSync(imagePath)) {
+			// Проверяем существование файла асинхронно
+			try {
+				await fs.promises.access(imagePath);
+			} catch {
 				console.warn(`Изображение не найдено: ${imagePath}`);
+				this.resourcesCache.images.set(imageFileName, '');
 				return '';
 			}
 
-			// Читаем и кодируем изображение в base64
-			const imageBuffer = fs.readFileSync(imagePath);
+			// Читаем и кодируем изображение в base64 асинхронно
+			const imageBuffer = await fs.promises.readFile(imagePath);
 			const extension = path.extname(imageFileName).toLowerCase();
 
 			// Определяем MIME-тип
@@ -119,31 +184,37 @@ export class ImageGenerationService {
 			else if (extension === '.gif') mimeType = 'image/gif';
 			else if (extension === '.webp') mimeType = 'image/webp';
 
-			return `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
+			const dataUri = `data:${mimeType};base64,${imageBuffer.toString(
+				'base64',
+			)}`;
+
+			// Кэшируем результат
+			this.resourcesCache.images.set(imageFileName, dataUri);
+			return dataUri;
 		} catch (error) {
 			console.error('Ошибка при загрузке изображения:', error);
+			this.resourcesCache.images.set(imageFileName, '');
 			return '';
 		}
 	}
 
 	/**
-	 * Генерирует CSS для встраивания шрифтов
+	 * Асинхронно генерирует CSS для встраивания шрифтов
 	 */
-	private generateFontFaces(): string {
+	private async generateFontFaces(): Promise<string> {
 		// Список шрифтов для загрузки
 		const fonts = [
 			{ file: 'Montserrat-Regular.ttf', weight: 400, style: 'normal' },
 			{ file: 'Montserrat-Bold.ttf', weight: 700, style: 'normal' },
 		];
 
-		// Генерируем CSS для каждого шрифта
-		return fonts
-			.map((font) => {
-				const base64Font = this.loadFontAsBase64(font.file);
+		// Загружаем все шрифты параллельно
+		const fontPromises = fonts.map(async (font) => {
+			const base64Font = await this.loadFontAsBase64(font.file);
 
-				if (!base64Font) return '';
+			if (!base64Font) return '';
 
-				return `
+			return `
       @font-face {
         font-family: 'Montserrat';
         src: url(data:font/truetype;charset=utf-8;base64,${base64Font}) format('truetype');
@@ -152,66 +223,10 @@ export class ImageGenerationService {
         font-display: swap;
       }
     `;
-			})
-			.join('\n');
-	}
+		});
 
-	/**
-	 * Инициализирует браузер Puppeteer
-	 */
-	private async initBrowser() {
-		if (!this.browser) {
-			// Определяем, используем ли мы serverless окружение
-			const isProduction = process.env.NODE_ENV === 'production';
-
-			if (isProduction) {
-				// Для production (Railway/serverless) используем chromium
-				this.browser = await puppeteer.launch({
-					args: [
-						...chromium.args,
-						'--no-sandbox',
-						'--disable-setuid-sandbox',
-						'--disable-dev-shm-usage',
-						'--disable-accelerated-2d-canvas',
-						'--no-first-run',
-						'--no-zygote',
-						'--single-process',
-						'--disable-gpu',
-					],
-					defaultViewport: chromium.defaultViewport,
-					executablePath: await chromium.executablePath(),
-					headless: chromium.headless,
-				});
-			} else {
-				// Для локальной разработки пытаемся использовать обычный puppeteer
-				try {
-					// Сначала пробуем с chromium (если установлен)
-					this.browser = await puppeteer.launch({
-						args: [...chromium.args],
-						defaultViewport: chromium.defaultViewport,
-						executablePath: await chromium.executablePath(),
-						headless: chromium.headless,
-					});
-				} catch (error) {
-					console.log('Chromium не найден, используем системный Chrome');
-					// Fallback на системный браузер
-					this.browser = await puppeteer.launch({
-						headless: true,
-						args: [
-							'--no-sandbox',
-							'--disable-setuid-sandbox',
-							'--disable-dev-shm-usage',
-							'--disable-accelerated-2d-canvas',
-							'--no-first-run',
-							'--no-zygote',
-							'--single-process',
-							'--disable-gpu',
-						],
-					});
-				}
-			}
-		}
-		return this.browser;
+		const fontCssArray = await Promise.all(fontPromises);
+		return fontCssArray.filter((css) => css !== '').join('\n');
 	}
 
 	/**
@@ -266,17 +281,20 @@ export class ImageGenerationService {
 			data,
 		);
 
+		// Убеждаемся, что ресурсы инициализированы
+		await this.initializeResources();
+
 		let fontFaces = '';
 		try {
-			fontFaces = this.generateFontFaces();
+			fontFaces = await this.generateFontFaces();
 		} catch (error) {
 			console.error('Ошибка при загрузке шрифтов:', error);
 			// Продолжаем работу без локальных шрифтов
 		}
 
-		// Загружаем локальные изображения в base64
-		const backgroundImage = this.loadImageAsBase64('main_bg.jpg');
-		const mainLogo = this.loadImageAsBase64('main_logo.png');
+		// Загружаем локальные изображения в base64 (теперь из кэша)
+		const backgroundImage = await this.loadImageAsBase64('main_bg.jpg');
+		const mainLogo = await this.loadImageAsBase64('main_logo.png');
 
 		const playersHTML = data.categories
 			.map((category) => {
@@ -347,7 +365,7 @@ export class ImageGenerationService {
 			}
 			max-width: 800px;
 			color: white;
-			padding: 0 30px 30px;
+			padding: 30px 20px 30px 20px;
 
 		}
 
@@ -359,6 +377,7 @@ export class ImageGenerationService {
 		.container-logo {
 			display: flex;
 			justify-content: center;
+			margin-bottom: 20px;
 		}
 
 		.main-logo {
@@ -368,7 +387,7 @@ export class ImageGenerationService {
 
 		.content {
 			background: #ffffff;
-			border-radius: 16px;
+			border-radius: 35px;
 			padding: 20px;
 		}
 
@@ -377,7 +396,7 @@ export class ImageGenerationService {
 			align-items: center;
 			justify-content: center;
 			gap: 12px;
-			margin-bottom: 20px;
+			margin: 10px 0 30px;
 		}
 
 		.club-logo {
@@ -391,7 +410,7 @@ export class ImageGenerationService {
 		}
 
 		.category-section {
-			margin-bottom: 20px;
+			margin-top: 20px;
 			border-radius: 15px;
 			overflow: hidden;
 			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -428,7 +447,7 @@ export class ImageGenerationService {
 
 		.footer {
 			text-align: center;
-			margin-top: 30px;
+			margin-top: 40px;
 			font-size: 20px;
 			font-weight: regular;
 			color: white;
@@ -467,56 +486,39 @@ export class ImageGenerationService {
 	}
 
 	/**
-	 * Генерирует изображение на основе данных (асинхронная версия)
+	 * Генерирует изображение на основе данных (неблокирующая версия с Worker)
 	 */
 	public async generateResultsImage(
 		data: ShareImageData,
 	): Promise<{ imageBuffer: Buffer; club: { name: string } }> {
-		// Выносим генерацию изображения в отдельный процесс для избежания блокировки
-		return new Promise(async (resolve, reject) => {
-			try {
-				// Сначала получаем данные клуба
-				const { club } = await this.getClubAndPlayersData(data);
+		try {
+			// Сначала получаем данные клуба
+			const { club } = await this.getClubAndPlayersData(data);
 
-				const browser = await this.initBrowser();
-				const page = await browser.newPage();
+			// Генерируем HTML
+			const html = await this.generateHTML(data);
 
-				try {
-					// Устанавливаем размер страницы
-					await page.setViewport({ width: 800, height: 1000 });
+			// Генерируем изображение в отдельном Worker потоке
+			const imageBuffer = await generateImageInWorker(html, 800, 1000);
 
-					// Загружаем HTML (теперь асинхронно)
-					const html = await this.generateHTML(data);
-					await page.setContent(html, { waitUntil: 'networkidle0' });
-
-					// Генерируем скриншот
-					const screenshot = await page.screenshot({
-						type: 'jpeg',
-						fullPage: true,
-						quality: 95,
-					});
-
-					resolve({
-						imageBuffer: screenshot as Buffer,
-						club: { name: club.name },
-					});
-				} finally {
-					await page.close();
-				}
-			} catch (error) {
-				reject(error);
-			}
-		});
+			return {
+				imageBuffer,
+				club: { name: club.name },
+			};
+		} catch (error) {
+			console.error('Ошибка при генерации изображения:', error);
+			throw error;
+		}
 	}
 
 	/**
-	 * Закрывает браузер при завершении работы
+	 * Очищает кэш ресурсов при завершении работы
 	 */
 	public async cleanup() {
-		if (this.browser) {
-			await this.browser.close();
-			this.browser = null;
-		}
+		this.resourcesCache.fonts.clear();
+		this.resourcesCache.images.clear();
+		this.resourcesCache.isInitialized = false;
+		console.log('🧹 Кэш ImageGenerationService очищен');
 	}
 }
 

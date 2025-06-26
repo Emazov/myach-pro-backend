@@ -87,11 +87,18 @@ const initApp = () => {
 	});
 
 	// Запускаем сервер
-	app.listen(config.port, () => {
+	app.listen(config.port, async () => {
 		console.log(`Сервер запущен на порту ${config.port}`);
 		console.log(
 			'Периодическая очистка старых игровых сессий запущена (каждые 30 минут)',
 		);
+
+		// Инициализируем ресурсы для генерации изображений
+		try {
+			await imageGenerationService.initializeResources();
+		} catch (error) {
+			console.error('Ошибка при инициализации ImageGenerationService:', error);
+		}
 	});
 
 	return {
