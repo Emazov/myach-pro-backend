@@ -372,7 +372,6 @@ export class ImageGenerationService {
 
 		.container {
 			width: 100%;
-			height: 100%;
 		}
 
 		.container-logo {
