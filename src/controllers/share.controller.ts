@@ -4,6 +4,7 @@ import {
 	ShareImageData,
 } from '../services/imageGeneration.service';
 import { TelegramBotService } from '../bot/telegramBot';
+import { botMessagingService } from '../services/botMessaging.service';
 import { initDataUtils } from '../utils/initDataUtils';
 import { config } from '../config/env';
 import { Readable } from 'stream';
@@ -87,31 +88,20 @@ export class ShareController {
 			}`;
 
 			try {
-				// КРИТИЧЕСКАЯ ПРОВЕРКА: Убеждаемся что бот доступен
-				if (!this.botService.isBotAvailable()) {
-					throw new Error('Telegram бот не доступен в этом процессе');
-				}
-
 				// Проверяем что userId определен
 				if (!userId) {
 					throw new Error('ID пользователя не определен');
 				}
 
-				// Логирование попытки отправки (только важные детали)
-				logger.debug(
-					`Отправка изображения пользователю ${userId}`,
-					'TELEGRAM_BOT',
-				);
-
-				// Используем метод sendImage из botService
-				const success = await this.botService.sendImage(
+				// Используем универсальный сервис отправки (работает в любом процессе)
+				const success = await botMessagingService.sendImage(
 					userId,
 					imageBuffer,
 					caption,
 				);
 
 				if (!success) {
-					throw new Error('Не удалось отправить изображение через botService');
+					throw new Error('Не удалось отправить изображение');
 				}
 
 				// Логируем успешную отправку
@@ -120,12 +110,12 @@ export class ShareController {
 				// Логируем ошибку отправки
 				logger.imageSent(false, userId?.toString());
 				logger.error(
-					'Ошибка отправки через botService',
+					'Ошибка отправки изображения',
 					'TELEGRAM_BOT',
 					sendError as Error,
 				);
 
-				// Если бот не доступен в этом процессе, уведомляем пользователя
+				// Если отправка не удалась, уведомляем пользователя
 				throw new Error('Сервис временно недоступен. Попробуйте позже.');
 			}
 

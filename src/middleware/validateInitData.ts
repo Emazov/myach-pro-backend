@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { validate } from '@telegram-apps/init-data-node';
 import { parseInitData } from '../utils/initDataUtils';
 import { config } from '../config/env';
+import { logger } from '../utils/logger';
 
 /**
  * Middleware для аутентификации через init data Telegram Mini App
@@ -14,9 +15,7 @@ export function initDataAuth(
 	try {
 		const auth = req.header('Authorization') || '';
 
-		console.log('Authorization header:', auth ? 'Присутствует' : 'Отсутствует');
-		console.log('Request URL:', req.url);
-		console.log('Request method:', req.method);
+		// Логируем только важные события (без спама)
 
 		if (!auth || !auth.startsWith('tma ')) {
 			console.error(
@@ -53,7 +52,8 @@ export function initDataAuth(
 		req.body.telegramUser = initData.user;
 		req.body.initData = initData;
 
-		console.log('Успешная авторизация пользователя:', initData.user.id);
+		// Успешная авторизация - логируем через оптимизированный logger
+		logger.auth(initData.user.id.toString());
 		next();
 	} catch (e: any) {
 		console.error('Ошибка обработки initData:', e);

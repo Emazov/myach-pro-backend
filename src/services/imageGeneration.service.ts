@@ -405,15 +405,6 @@ export class ImageGenerationService {
 										player.avatarUrl ||
 										createPlayerAvatarPlaceholder(player.name);
 
-									console.log(`🎨 HTML для игрока ${player.name}:`);
-									console.log(
-										`   Оригинальный URL: ${player.avatarUrl || 'НЕТ'}`,
-									);
-									console.log(
-										`   Используемый src: ${playerAvatar.substring(0, 100)}...`,
-									);
-									console.log(`   Это плейсхолдер: ${!player.avatarUrl}`);
-
 									return `<img src="${playerAvatar}" alt="${
 										player.name
 									}" class="player-avatar" onerror="this.src='${createPlayerAvatarPlaceholder(
