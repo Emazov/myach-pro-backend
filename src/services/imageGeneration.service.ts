@@ -2,6 +2,7 @@ import { config } from '../config/env';
 import { prisma } from '../prisma';
 import { StorageService } from './storage.service';
 import { generateImageInWorker } from '../workers/imageWorker';
+import { logger } from '../utils/logger';
 import fs from 'fs';
 import path from 'path';
 
@@ -116,9 +117,16 @@ export class ImageGenerationService {
 			await Promise.all([...fontPromises, ...imagePromises]);
 
 			this.resourcesCache.isInitialized = true;
-			console.log('✅ Ресурсы для генерации изображений инициализированы');
+			logger.info(
+				'Ресурсы для генерации изображений инициализированы',
+				'IMAGE_GENERATION',
+			);
 		} catch (error) {
-			console.error('❌ Ошибка при инициализации ресурсов:', error);
+			logger.error(
+				'Ошибка при инициализации ресурсов',
+				'IMAGE_GENERATION',
+				error,
+			);
 			// Продолжаем работу даже с ошибками
 			this.resourcesCache.isInitialized = true;
 		}
@@ -147,7 +155,7 @@ export class ImageGenerationService {
 			try {
 				await fs.promises.access(fontPath);
 			} catch {
-				console.warn(`⚠️ Шрифт не найден: ${fontPath}`);
+				logger.silentImageProcess(`Шрифт не найден: ${fontFileName}`);
 				this.resourcesCache.fonts.set(fontFileName, {
 					data: '',
 					timestamp: Date.now(),
@@ -166,7 +174,11 @@ export class ImageGenerationService {
 			});
 			return base64Font;
 		} catch (error) {
-			console.error('❌ Ошибка при загрузке шрифта:', error);
+			logger.silentImageProcess(
+				`Ошибка при загрузке шрифта ${fontFileName}: ${
+					(error as any)?.message || 'Unknown error'
+				}`,
+			);
 			this.resourcesCache.fonts.set(fontFileName, {
 				data: '',
 				timestamp: Date.now(),
@@ -270,9 +282,8 @@ export class ImageGenerationService {
 	private async getClubAndPlayersData(data: ShareImageData) {
 		const storageService = new StorageService();
 
-		console.log('🔍 Начинаем получение данных клуба и игроков');
-		console.log('📦 Club ID:', data.clubId);
-		console.log('📋 Categories:', data.categorizedPlayerIds);
+		// Используем оптимизированное логирование
+		logger.silentImageProcess(`Получение данных для клуба ${data.clubId}`);
 
 		// Получаем клуб с подписанным URL логотипа
 		const club = await prisma.club.findUnique({
@@ -283,25 +294,16 @@ export class ImageGenerationService {
 			throw new Error('Клуб не найден');
 		}
 
-		console.log('🏢 Клуб найден:', club.name);
-		console.log('🖼️ Клуб имеет логотип:', !!club.logo);
+		logger.silentImageProcess(`Клуб найден: ${club.name}`);
 
 		// Получаем всех игроков одним запросом для оптимизации
 		const allPlayerIds = Object.values(data.categorizedPlayerIds).flat();
-		console.log('👥 Всего ID игроков:', allPlayerIds.length, allPlayerIds);
-
 		const players = await prisma.players.findMany({
 			where: { id: { in: allPlayerIds } },
 		});
 
-		console.log('🎮 Игроков найдено в БД:', players.length);
-		console.log(
-			'🎮 Игроки с аватарками:',
-			players.filter((p) => p.avatar).length,
-		);
-		console.log(
-			'📸 Ключи аватарок:',
-			players.map((p) => ({ name: p.name, avatar: p.avatar })),
+		logger.silentImageProcess(
+			`Игроков найдено: ${players.length} из ${allPlayerIds.length}`,
 		);
 
 		// Собираем все ключи изображений для батч-обработки
@@ -310,18 +312,15 @@ export class ImageGenerationService {
 			.map((player) => player.avatar)
 			.filter(Boolean) as string[];
 
-		console.log('🔑 Logo keys:', logoKeys);
-		console.log('🔑 Avatar keys:', avatarKeys);
-
 		// Получаем все URL за один раз
 		const [logoUrls, avatarUrls] = await Promise.all([
 			storageService.getBatchFastUrls(logoKeys, 'logo'),
 			storageService.getBatchFastUrls(avatarKeys, 'avatar'),
 		]);
 
-		console.log('🌐 Logo URLs:', logoUrls);
-		console.log('🌐 Avatar URLs получено:', Object.keys(avatarUrls).length);
-		console.log('🌐 Avatar URLs details:', avatarUrls);
+		logger.silentImageProcess(
+			`URLs получены: логотипы ${logoKeys.length}, аватары ${avatarKeys.length}`,
+		);
 
 		const clubLogoUrl = club.logo ? logoUrls[club.logo] || '' : '';
 
@@ -331,17 +330,6 @@ export class ImageGenerationService {
 		for (const player of players) {
 			const avatarUrl = player.avatar ? avatarUrls[player.avatar] || '' : '';
 
-			console.log(
-				`👤 Игрок: ${player.name}, avatar key: ${player.avatar}, avatarUrl: ${
-					avatarUrl ? 'ЕСТЬ' : 'НЕТ'
-				}`,
-			);
-			if (avatarUrl) {
-				console.log(
-					`🔗 Avatar URL для ${player.name}: ${avatarUrl.substring(0, 100)}...`,
-				);
-			}
-
 			playersMap.set(player.id, {
 				id: player.id,
 				name: player.name,
@@ -349,7 +337,9 @@ export class ImageGenerationService {
 			});
 		}
 
-		console.log('✅ Карта игроков создана, размер:', playersMap.size);
+		logger.silentImageProcess(
+			`Карта игроков создана: ${playersMap.size} записей`,
+		);
 
 		return { club, clubLogoUrl, playersMap };
 	}
@@ -513,7 +503,7 @@ export class ImageGenerationService {
 			align-items: center;
 			justify-content: center;
 			gap: 12px;
-			margin-bottom: 20px;
+			margin-bottom: 15px;
 		}
 
 		.club-logo {
@@ -663,8 +653,8 @@ export class ImageGenerationService {
 
 			const finalOptions = { ...defaultOptions, ...options };
 
-			console.log(
-				`🎨 Генерация изображения: ${finalOptions.width}x${finalOptions.height}, качество: ${finalOptions.quality}%`,
+			logger.silentImageProcess(
+				`Генерация ${finalOptions.width}x${finalOptions.height}, качество ${finalOptions.quality}%`,
 			);
 
 			// Сначала получаем данные клуба
@@ -674,9 +664,7 @@ export class ImageGenerationService {
 			const html = await this.generateHTML(data, finalOptions);
 
 			// Генерируем изображение в отдельном Worker потоке
-			console.log(
-				`🔧 Параметры генерации: качество=${finalOptions.quality}%, скорость=${finalOptions.optimizeForSpeed}`,
-			);
+			const startTime = Date.now();
 
 			const imageBuffer = await generateImageInWorker(
 				html,
@@ -686,14 +674,22 @@ export class ImageGenerationService {
 				finalOptions.optimizeForSpeed,
 			);
 
-			console.log(`✅ Изображение сгенерировано: ${imageBuffer.length} байт`);
+			const duration = Date.now() - startTime;
+
+			// Логируем результат через оптимизированный метод
+			logger.imageGenerated(true, undefined, duration);
 
 			return {
 				imageBuffer,
 				club: { name: club.name },
 			};
 		} catch (error) {
-			console.error('❌ Ошибка при генерации изображения:', error);
+			logger.imageGenerated(false);
+			logger.error(
+				'Ошибка при генерации изображения',
+				'IMAGE_GENERATION',
+				error as Error,
+			);
 			throw error;
 		}
 	}
@@ -718,7 +714,7 @@ export class ImageGenerationService {
 			}
 		}
 
-		console.log(`🧹 Очищен устаревший кэш ресурсов`);
+		logger.silentImageProcess('Очищен устаревший кэш ресурсов');
 	}
 
 	/**
@@ -728,7 +724,7 @@ export class ImageGenerationService {
 		this.resourcesCache.fonts.clear();
 		this.resourcesCache.images.clear();
 		this.resourcesCache.isInitialized = false;
-		console.log('🧹 Кэш ресурсов полностью очищен');
+		logger.info('Кэш ресурсов полностью очищен', 'IMAGE_GENERATION');
 	}
 }
 

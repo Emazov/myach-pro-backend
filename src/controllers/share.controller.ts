@@ -31,13 +31,11 @@ export class ShareController {
 		try {
 			const { shareData, telegramUser } = req.body; // telegramUser из middleware
 
-			// Детальное логирование для диагностики
-			console.log('🔍 Диагностика shareResults:');
-			console.log('📦 shareData присутствует:', !!shareData);
-			console.log('👤 telegramUser из middleware:', telegramUser);
-			console.log('🆔 telegramUser.id:', telegramUser?.id);
-			console.log('📋 Headers Authorization:', req.headers.authorization);
-			console.log('📋 req.body keys:', Object.keys(req.body));
+			// Диагностика запроса (только в development)
+			logger.debug(
+				`ShareResults запрос: user ${telegramUser?.id}`,
+				'IMAGE_GENERATION',
+			);
 
 			if (!shareData) {
 				res.status(400).json({
@@ -47,19 +45,10 @@ export class ShareController {
 			}
 
 			if (!telegramUser || !telegramUser.id) {
-				console.error('❌ Ошибка: пользователь не найден в middleware');
-				console.error('📋 Полные заголовки:', req.headers);
-				console.error('👤 Объект telegramUser:', telegramUser);
-				console.error('📦 req.body:', req.body);
+				logger.error('Пользователь не найден в middleware', 'AUTH');
 
 				res.status(400).json({
 					error: 'Не удалось получить ID пользователя',
-					debug: {
-						hasTelegramUser: !!telegramUser,
-						userId: telegramUser?.id,
-						hasAuthHeader: !!req.headers.authorization,
-						bodyKeys: Object.keys(req.body),
-					},
 				});
 				return;
 			}
@@ -73,8 +62,7 @@ export class ShareController {
 				clubId: shareData.clubId,
 			};
 
-			// Генерируем изображение с теми же настройками что и для iOS
-			console.log('🎨 Генерация изображения для Android с высоким качеством');
+			// Генерируем изображение с оптимальными настройками
 			const { imageBuffer, club } =
 				await imageGenerationService.generateResultsImage(imageData, {
 					quality: 90, // Высокое качество как для iOS
@@ -85,13 +73,11 @@ export class ShareController {
 
 			// Проверяем размер изображения
 			const imageSizeMB = imageBuffer.length / (1024 * 1024);
-			console.log(
-				`Размер сгенерированного изображения: ${imageSizeMB.toFixed(2)} MB`,
-			);
 
 			if (imageSizeMB > 10) {
-				console.warn(
-					'Изображение слишком большое, может возникнуть ошибка при отправке',
+				logger.warn(
+					`Изображение слишком большое: ${imageSizeMB.toFixed(2)}MB`,
+					'IMAGE_GENERATION',
 				);
 			}
 
@@ -111,11 +97,11 @@ export class ShareController {
 					throw new Error('ID пользователя не определен');
 				}
 
-				console.log(
-					`📤 Отправка изображения в Telegram для пользователя: ${userId}`,
+				// Логирование попытки отправки (только важные детали)
+				logger.debug(
+					`Отправка изображения пользователю ${userId}`,
+					'TELEGRAM_BOT',
 				);
-				console.log(`📝 Размер изображения: ${imageBuffer.length} байт`);
-				console.log(`🤖 Бот доступен: ${this.botService.isBotAvailable()}`);
 
 				// Используем метод sendImage из botService
 				const success = await this.botService.sendImage(
@@ -128,14 +114,16 @@ export class ShareController {
 					throw new Error('Не удалось отправить изображение через botService');
 				}
 
-				console.log('✅ Изображение успешно отправлено через botService');
+				// Логируем успешную отправку
+				logger.imageSent(true, userId.toString(), imageBuffer.length);
 			} catch (sendError) {
-				console.error('❌ Ошибка отправки через botService:', {
-					error:
-						sendError instanceof Error ? sendError.message : String(sendError),
-					userId,
-					imageSize: imageBuffer.length,
-				});
+				// Логируем ошибку отправки
+				logger.imageSent(false, userId?.toString());
+				logger.error(
+					'Ошибка отправки через botService',
+					'TELEGRAM_BOT',
+					sendError as Error,
+				);
 
 				// Если бот не доступен в этом процессе, уведомляем пользователя
 				throw new Error('Сервис временно недоступен. Попробуйте позже.');
@@ -148,13 +136,10 @@ export class ShareController {
 				closeWebApp: true,
 			});
 		} catch (error) {
-			console.error(
-				'❌ Критическая ошибка при генерации и отправке изображения:',
-				{
-					error: error instanceof Error ? error.message : String(error),
-					stack: error instanceof Error ? error.stack : undefined,
-					userId,
-				},
+			logger.error(
+				'Критическая ошибка при генерации и отправке изображения',
+				'IMAGE_GENERATION',
+				error as Error,
 			);
 			res.status(500).json({
 				error: 'Произошла ошибка при обработке запроса',
@@ -194,8 +179,9 @@ export class ShareController {
 			res.send(imageBuffer);
 		} catch (error) {
 			logger.error(
-				'Ошибка при генерации превью изображения:',
-				error instanceof Error ? error.message : String(error),
+				'Ошибка при генерации превью изображения',
+				'IMAGE_GENERATION',
+				error as Error,
 			);
 			res.status(500).json({
 				error: 'Не удалось сгенерировать изображение',

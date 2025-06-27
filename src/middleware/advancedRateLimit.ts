@@ -98,45 +98,8 @@ export class AdvancedRateLimit {
 					return;
 				}
 
-				// Добавляем обработчик для отслеживания успешности запроса
-				if (
-					!this.options.skipSuccessfulRequests ||
-					!this.options.skipFailedRequests
-				) {
-					const originalSend = res.send;
-					const rateLimitOptions = this.options; // Сохраняем ссылку на options
-					res.send = function (data) {
-						const statusCode = res.statusCode;
-
-						// Если нужно пропускать успешные или неудачные запросы
-						if (
-							(statusCode >= 200 &&
-								statusCode < 300 &&
-								rateLimitOptions.skipSuccessfulRequests) ||
-							(statusCode >= 400 && rateLimitOptions.skipFailedRequests)
-						) {
-							// Удаляем запрос из счетчика
-							redisService
-								.get(key)
-								.then(async (value) => {
-									if (value) {
-										const pipeline = (redisService as any).client.pipeline();
-										pipeline.zrem(key, `${now}-${Math.random()}`);
-										await pipeline.exec();
-									}
-								})
-								.catch((err) => {
-									logger.error(
-										'Ошибка при удалении из rate limit:',
-										'RATE_LIMIT',
-										err,
-									);
-								});
-						}
-
-						return originalSend.call(this, data);
-					};
-				}
+				// Упрощенная версия без сложной логики удаления
+				// Просто отслеживаем количество запросов без попыток коррекции
 
 				next();
 			} catch (error) {
