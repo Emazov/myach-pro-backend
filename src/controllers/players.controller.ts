@@ -2,7 +2,7 @@ import { Response, NextFunction } from 'express';
 import { TelegramRequest, PlayerWithSignedUrl } from '../types/api';
 import { prisma } from '../prisma';
 import { StorageService } from '../services/storage.service';
-import { invalidateCache } from '../utils/cacheUtils';
+import { invalidateCache, invalidateClubsCache } from '../utils/cacheUtils';
 
 // Создаем экземпляр сервиса для хранилища
 const storageService = new StorageService();
@@ -98,13 +98,10 @@ export const createPlayer = async (
 			);
 		}
 
-		// ОПТИМИЗАЦИЯ 4: Более быстрая инвалидация кэша
+		// ОПТИМИЗАЦИЯ 4: Полная инвалидация кеша клубов
 		operations.push(
-			// Инвалидируем только конкретные ключи вместо поиска по шаблону
-			Promise.all([
-				invalidateCache(`cache:clubs:id:${clubId}`),
-				invalidateCache('cache:clubs:all'),
-			]),
+			// Инвалидируем весь кеш клубов для обеспечения актуальности
+			invalidateClubsCache(),
 		);
 
 		// Ждем завершения всех операций
@@ -327,11 +324,8 @@ export const updatePlayer = async (
 			? await storageService.getSignedUrl(updatedPlayer.avatar)
 			: '';
 
-		// Инвалидируем кэш клубов, так как изменился игрок
-		await Promise.all([
-			invalidateCache(`cache:clubs:id:${updatedPlayer.clubId}`),
-			invalidateCache('cache:clubs:all'),
-		]);
+		// Инвалидируем кэш клубов полностью, так как изменился игрок
+		await invalidateClubsCache();
 
 		res.json({
 			ok: true,
@@ -396,11 +390,8 @@ export const deletePlayer = async (
 			where: { id },
 		});
 
-		// Инвалидируем кэш клубов, так как удалился игрок
-		await Promise.all([
-			invalidateCache(`cache:clubs:id:${player.clubId}`),
-			invalidateCache('cache:clubs:all'),
-		]);
+		// Инвалидируем кэш клубов полностью, так как удалился игрок
+		await invalidateClubsCache();
 
 		res.json({
 			ok: true,

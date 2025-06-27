@@ -7,6 +7,7 @@ import { config } from './config/env';
 import { TelegramBotService } from './bot/telegramBot';
 import { redisService } from './services/redis.service';
 import { AnalyticsService } from './services/analytics.service';
+import { AdminService } from './services/admin.service';
 import { imageGenerationService } from './services/imageGeneration.service';
 import { logger } from './utils/logger';
 
@@ -132,6 +133,13 @@ const initApp = () => {
 		logger.info(
 			'Периодическая очистка старых игровых сессий запущена (каждые 30 минут)',
 		);
+
+		// Проверяем изменение главного админа при запуске
+		try {
+			await AdminService.checkAndResetAdminsOnMainAdminChange();
+		} catch (error) {
+			logger.error('Ошибка при проверке главного админа', 'STARTUP', error);
+		}
 
 		// Инициализируем ресурсы для генерации изображений
 		try {

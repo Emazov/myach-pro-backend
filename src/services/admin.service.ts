@@ -223,4 +223,78 @@ export class AdminService {
 			return [];
 		}
 	}
-} 
+
+	/**
+	 * Проверяет изменение главного админа и сбрасывает список админов при необходимости
+	 * Вызывается при запуске сервера
+	 */
+	static async checkAndResetAdminsOnMainAdminChange(): Promise<void> {
+		try {
+			const LAST_MAIN_ADMIN_KEY = 'last_main_admin_id';
+
+			// Получаем сохраненный ID главного админа из базы данных
+			const lastMainAdminId = await prisma.systemSettings.findUnique({
+				where: { key: LAST_MAIN_ADMIN_KEY },
+			});
+
+			const currentMainAdminId = config.telegram.adminId;
+
+			// Если главный админ изменился
+			if (lastMainAdminId?.value !== currentMainAdminId) {
+				console.log(
+					`Обнаружено изменение главного админа: ${
+						lastMainAdminId?.value || 'не установлен'
+					} -> ${currentMainAdminId}`,
+				);
+
+				// Удаляем всех админов кроме нового главного
+				await prisma.adminUser.deleteMany({
+					where: {
+						telegramId: {
+							not: currentMainAdminId,
+						},
+					},
+				});
+
+				// Сбрасываем роли всех пользователей кроме главного админа
+				await prisma.user.updateMany({
+					where: {
+						telegramId: {
+							not: currentMainAdminId,
+						},
+						role: 'admin',
+					},
+					data: {
+						role: 'user',
+					},
+				});
+
+				// Устанавливаем роль админа для нового главного админа
+				await prisma.user.updateMany({
+					where: {
+						telegramId: currentMainAdminId,
+					},
+					data: {
+						role: 'admin',
+					},
+				});
+
+				// Сохраняем новый ID главного админа
+				await prisma.systemSettings.upsert({
+					where: { key: LAST_MAIN_ADMIN_KEY },
+					update: { value: currentMainAdminId },
+					create: {
+						key: LAST_MAIN_ADMIN_KEY,
+						value: currentMainAdminId,
+					},
+				});
+
+				console.log(
+					`Список админов сброшен. Оставлен только главный админ: ${currentMainAdminId}`,
+				);
+			}
+		} catch (error) {
+			console.error('Ошибка при проверке изменения главного админа:', error);
+		}
+	}
+}

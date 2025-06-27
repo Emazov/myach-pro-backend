@@ -117,6 +117,29 @@ export async function invalidateClubsCache(): Promise<void> {
 }
 
 /**
+ * Полная инвалидация всех кешей связанных с данными (клубы, игроки, аналитика)
+ * Используется при критических изменениях данных
+ */
+export async function invalidateAllDataCache(): Promise<void> {
+	try {
+		// Очищаем все основные кеши приложения
+		const patterns = [
+			'cache:clubs:*',
+			'cache:analytics:*',
+			'cache:players:*', // если есть кеш игроков
+			'cache:admin:*', // если есть кеш админов
+		];
+
+		const promises = patterns.map((pattern) => invalidateCache(pattern));
+		await Promise.all(promises);
+
+		console.log('Выполнена полная инвалидация кеша данных');
+	} catch (error) {
+		console.error('Ошибка при полной инвалидации кеша:', error);
+	}
+}
+
+/**
  * Очищает весь кеш аналитики
  */
 export async function invalidateAnalyticsCache(): Promise<void> {

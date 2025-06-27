@@ -4,6 +4,7 @@ import { AdminService } from '../services/admin.service';
 import {
 	invalidateClubsCache,
 	invalidateAnalyticsCache,
+	invalidateAllDataCache,
 } from '../utils/cacheUtils';
 import { redisService } from '../services/redis.service';
 
@@ -54,6 +55,8 @@ export const addAdmin = async (
 		);
 
 		if (result.success) {
+			// Инвалидируем кеш при изменении админов
+			await invalidateAllDataCache();
 			res.json({ ok: true, message: result.message });
 		} else {
 			res.status(400).json({ error: result.message });
@@ -90,6 +93,8 @@ export const removeAdmin = async (
 		const result = await AdminService.removeAdmin(telegramId, removedBy);
 
 		if (result.success) {
+			// Инвалидируем кеш при изменении админов
+			await invalidateAllDataCache();
 			res.json({ ok: true, message: result.message });
 		} else {
 			res.status(400).json({ error: result.message });
@@ -162,6 +167,8 @@ export const addAdminByUsername = async (
 		const result = await AdminService.addAdminByUsername(username, addedBy);
 
 		if (result.success) {
+			// Инвалидируем кеш при изменении админов
+			await invalidateAllDataCache();
 			res.json({ ok: true, message: result.message });
 		} else {
 			res.status(400).json({ error: result.message });

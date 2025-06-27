@@ -99,3 +99,13 @@ model GameSession {
     @@index([isCompleted])
     @@map("game_sessions")
 }
+
+model SystemSettings {
+    id        String   @id @default(uuid())
+    key       String   @unique
+    value     String
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    @@map("system_settings")
+}
