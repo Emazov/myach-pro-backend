@@ -89,6 +89,13 @@ class RedisService {
 		if (keys.length === 0) return 0;
 		return this.client.del(...keys);
 	}
+
+	/**
+	 * Получить прямой доступ к Redis клиенту для специальных операций
+	 */
+	getClient(): Redis {
+		return this.client;
+	}
 }
 
 export const redisService = new RedisService();

@@ -25,7 +25,7 @@ import {
 	burstProtection,
 } from './middleware/advancedRateLimit';
 import { cacheService } from './services/cacheService';
-import { botMessagingService } from './services/botMessaging.service';
+import { simpleBotMessagingService } from './services/simpleBotMessaging.service';
 
 import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
@@ -99,7 +99,7 @@ const initApp = () => {
 	const botService = new TelegramBotService();
 
 	// Настраиваем межпроцессное взаимодействие для отправки изображений
-	botMessagingService.setBotService(botService);
+	simpleBotMessagingService.setBotService(botService);
 
 	// Создаем share роуты с переданным ботом
 	const shareRoutes = createShareRoutes(botService);

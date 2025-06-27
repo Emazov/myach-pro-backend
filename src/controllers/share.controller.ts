@@ -4,7 +4,7 @@ import {
 	ShareImageData,
 } from '../services/imageGeneration.service';
 import { TelegramBotService } from '../bot/telegramBot';
-import { botMessagingService } from '../services/botMessaging.service';
+import { simpleBotMessagingService } from '../services/simpleBotMessaging.service';
 import { initDataUtils } from '../utils/initDataUtils';
 import { config } from '../config/env';
 import { Readable } from 'stream';
@@ -94,7 +94,7 @@ export class ShareController {
 				}
 
 				// Используем универсальный сервис отправки (работает в любом процессе)
-				const success = await botMessagingService.sendImage(
+				const success = await simpleBotMessagingService.sendImage(
 					userId,
 					imageBuffer,
 					caption,
