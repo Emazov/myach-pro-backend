@@ -83,7 +83,7 @@ export class ShareController {
 			}
 
 			// Отправляем изображение пользователю в Telegram
-			const caption = `🏆 ТИР-ЛИСТ "${club.name.toUpperCase()}"\n\n⚽ Создай свой и делись с друзьями в\n@${
+			const caption = `🏆 ТИР-ЛИСТ "${club.name.toUpperCase()}"\n\n⚽ Создай свой и делись с друзьями в @${
 				config.telegram.botUsername
 			}`;
 

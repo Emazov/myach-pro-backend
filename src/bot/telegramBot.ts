@@ -219,8 +219,32 @@ export class TelegramBotService {
 								throw new Error('Бот недоступен');
 							}
 
+							// Создаем инлайн кнопку для запуска бота
+							const inlineKeyboard = [];
+
+							// Добавляем кнопку запуска бота, если URL доступен
+							if (config.webApp.url.startsWith('https://')) {
+								inlineKeyboard.push([
+									{
+										text: '🎯 Создать свой тир-лист',
+										web_app: { url: config.webApp.url },
+									},
+								]);
+							}
+
+							// Добавляем кнопку подписки на канал/бота (опционально)
+							inlineKeyboard.push([
+								{
+									text: '🤖 Подписаться на бота',
+									url: `https://t.me/${config.telegram.botUsername}`,
+								},
+							]);
+
 							await this.bot.sendPhoto(chatId, imageBuffer, {
 								caption: caption || 'Ваш тир-лист готов! 🎯',
+								reply_markup: {
+									inline_keyboard: inlineKeyboard,
+								},
 							});
 
 							logger.info(
@@ -324,9 +348,33 @@ export class TelegramBotService {
 				throw new Error('Бот недоступен');
 			}
 
+			// Создаем инлайн кнопку для запуска бота
+			const inlineKeyboard = [];
+
+			// Добавляем кнопку запуска бота, если URL доступен
+			if (config.webApp.url.startsWith('https://')) {
+				inlineKeyboard.push([
+					{
+						text: '🎯 Создать свой тир-лист',
+						web_app: { url: config.webApp.url },
+					},
+				]);
+			}
+
+			// Добавляем кнопку подписки на канал/бота (опционально)
+			inlineKeyboard.push([
+				{
+					text: '🤖 Подписаться на бота',
+					url: `https://t.me/${config.telegram.botUsername}`,
+				},
+			]);
+
 			// Отправляем файл
 			await this.bot.sendPhoto(chatId, tempFilePath, {
 				caption: caption || 'Ваш тир-лист готов! 🎯',
+				reply_markup: {
+					inline_keyboard: inlineKeyboard,
+				},
 			});
 
 			logger.info(
