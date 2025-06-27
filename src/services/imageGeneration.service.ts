@@ -241,10 +241,6 @@ export class ImageGenerationService {
 			throw new Error('Клуб не найден');
 		}
 
-		const clubLogoUrl = club.logo
-			? await storageService.getSignedUrl(club.logo)
-			: '';
-
 		// Получаем всех игроков одним запросом для оптимизации
 		const allPlayerIds = Object.values(data.categorizedPlayerIds).flat();
 
@@ -252,13 +248,25 @@ export class ImageGenerationService {
 			where: { id: { in: allPlayerIds } },
 		});
 
+		// Собираем все ключи изображений для батч-обработки
+		const logoKeys = club.logo ? [club.logo] : [];
+		const avatarKeys = players
+			.map((player) => player.avatar)
+			.filter(Boolean) as string[];
+
+		// Получаем все URL за один раз
+		const [logoUrls, avatarUrls] = await Promise.all([
+			storageService.getBatchFastUrls(logoKeys, 'logo'),
+			storageService.getBatchFastUrls(avatarKeys, 'avatar'),
+		]);
+
+		const clubLogoUrl = club.logo ? logoUrls[club.logo] || '' : '';
+
 		// Создаем карту игроков для быстрого поиска
 		const playersMap = new Map();
 
 		for (const player of players) {
-			const avatarUrl = player.avatar
-				? await storageService.getSignedUrl(player.avatar)
-				: '';
+			const avatarUrl = player.avatar ? avatarUrls[player.avatar] || '' : '';
 
 			playersMap.set(player.id, {
 				id: player.id,

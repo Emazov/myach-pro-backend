@@ -86,9 +86,9 @@ export const createClub = async (
 			},
 		});
 
-		// Генерируем подписанный URL для доступа к логотипу
+		// Генерируем оптимизированный URL для доступа к логотипу
 		const logoUrl = club.logo
-			? await storageService.getSignedUrl(club.logo)
+			? await storageService.getFastImageUrl(club.logo, 'logo')
 			: '';
 
 		// Инвалидируем все связанные кэши
@@ -131,22 +131,23 @@ export const getAllClubs = async (
 					orderBy: { name: 'asc' },
 				});
 
-				// Генерируем подписанные URL и формируем ответ
-				return Promise.all(
-					clubs.map(async (club) => {
-						// URL для логотипа
-						const logoUrl = club.logo
-							? await storageService.getSignedUrl(club.logo)
-							: '';
+				// Собираем все ключи логотипов для батч-обработки
+				const logoKeys = clubs
+					.map((club) => club.logo)
+					.filter(Boolean) as string[];
 
-						// Финальный формат клуба
-						return {
-							id: club.id,
-							name: club.name,
-							logoUrl,
-						};
-					}),
+				// Получаем все URL за один раз
+				const logoUrls = await storageService.getBatchFastUrls(
+					logoKeys,
+					'logo',
 				);
+
+				// Формируем ответ с предварительно полученными URL
+				return clubs.map((club) => ({
+					id: club.id,
+					name: club.name,
+					logoUrl: club.logo ? logoUrls[club.logo] || '' : '',
+				}));
 			},
 			CACHE_KEYS.ALL_CLUBS,
 			cacheOptions,
@@ -203,24 +204,27 @@ export const getClubById = async (
 					return null;
 				}
 
+				// Собираем все ключи изображений для батч-обработки
+				const logoKey = club.logo ? [club.logo] : [];
+				const avatarKeys = club.players
+					.map((player) => player.avatar)
+					.filter(Boolean) as string[];
+
+				// Получаем все URL за один раз
+				const [logoUrls, avatarUrls] = await Promise.all([
+					storageService.getBatchFastUrls(logoKey, 'logo'),
+					storageService.getBatchFastUrls(avatarKeys, 'avatar'),
+				]);
+
 				// URL для логотипа
-				const logoUrl = club.logo
-					? await storageService.getSignedUrl(club.logo)
-					: '';
+				const logoUrl = club.logo ? logoUrls[club.logo] || '' : '';
 
 				// Игроки с аватарами
-				const players = await Promise.all(
-					club.players.map(async (player) => {
-						const avatarUrl = player.avatar
-							? await storageService.getSignedUrl(player.avatar)
-							: '';
-						return {
-							id: player.id,
-							name: player.name,
-							avatarUrl,
-						};
-					}),
-				);
+				const players = club.players.map((player) => ({
+					id: player.id,
+					name: player.name,
+					avatarUrl: player.avatar ? avatarUrls[player.avatar] || '' : '',
+				}));
 
 				return {
 					id: club.id,
@@ -312,7 +316,7 @@ export const updateClub = async (
 
 		// URL для логотипа
 		const logoUrl = updatedClub.logo
-			? await storageService.getSignedUrl(updatedClub.logo)
+			? await storageService.getFastImageUrl(updatedClub.logo, 'logo')
 			: '';
 
 		res.json({

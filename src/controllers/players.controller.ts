@@ -74,7 +74,7 @@ export const createPlayer = async (
 
 		// Генерируем подписанный URL для аватара
 		const avatarUrl = player.avatar
-			? await storageService.getSignedUrl(player.avatar)
+			? await storageService.getFastImageUrl(player.avatar, 'avatar')
 			: '';
 
 		// Инвалидируем кэш клубов, так как добавился новый игрок
@@ -114,20 +114,23 @@ export const getAllPlayers = async (
 			},
 		});
 
-		// Генерируем подписанные URL для всех аватаров
-		const formattedPlayers = await Promise.all(
-			players.map(async (player) => {
-				const avatarUrl = player.avatar
-					? await storageService.getSignedUrl(player.avatar)
-					: '';
+		// Собираем все ключи аватаров для батч-обработки
+		const avatarKeys = players
+			.map((player) => player.avatar)
+			.filter(Boolean) as string[];
 
-				return {
-					id: player.id,
-					name: player.name,
-					avatarUrl,
-				};
-			}),
+		// Получаем все URL за один раз
+		const avatarUrls = await storageService.getBatchFastUrls(
+			avatarKeys,
+			'avatar',
 		);
+
+		// Формируем ответ с предварительно полученными URL
+		const formattedPlayers = players.map((player) => ({
+			id: player.id,
+			name: player.name,
+			avatarUrl: player.avatar ? avatarUrls[player.avatar] || '' : '',
+		}));
 
 		res.json({
 			ok: true,
@@ -176,7 +179,7 @@ export const getPlayerById = async (
 
 		// Генерируем подписанный URL для аватара
 		const avatarUrl = player.avatar
-			? await storageService.getSignedUrl(player.avatar)
+			? await storageService.getFastImageUrl(player.avatar, 'avatar')
 			: '';
 
 		res.json({

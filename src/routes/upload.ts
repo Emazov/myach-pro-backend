@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
 	generateUploadUrl,
 	getBatchImageUrls,
+	getFastImageUrls,
 	getCacheStats,
 } from '../controllers/upload.controller';
 import { initDataAuth } from '../middleware/validateInitData';
@@ -14,6 +15,9 @@ router.post('/url', initDataAuth, checkAdminRole, generateUploadUrl);
 
 // Получение множественных оптимизированных URL (для всех авторизованных пользователей)
 router.post('/batch-urls', initDataAuth, getBatchImageUrls);
+
+// Быстрое получение оптимизированных URL для изображений (для всех авторизованных пользователей)
+router.post('/fast-urls', initDataAuth, getFastImageUrls);
 
 // Получение статистики кэша (только для админов)
 router.get('/cache-stats', initDataAuth, checkAdminRole, getCacheStats);

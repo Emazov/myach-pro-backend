@@ -94,8 +94,11 @@ export class StorageService {
 		}
 
 		try {
-			// Если есть публичный домен, используем его с параметрами трансформации
-			if (this.publicDomain) {
+			// Приоритет: используем публичный домен если он настроен
+			if (
+				this.publicDomain &&
+				this.publicDomain !== `https://${this.bucketName}.r2.dev`
+			) {
 				const params = new URLSearchParams();
 				if (options.width) params.set('w', options.width.toString());
 				if (options.height) params.set('h', options.height.toString());
@@ -106,16 +109,16 @@ export class StorageService {
 					params.toString() ? '?' + params.toString() : ''
 				}`;
 
-				// Кэшируем на 23 часа
+				// Кэшируем на 7 дней для публичных URL
 				this.urlCache.set(cacheKey, {
 					url,
-					expiresAt: Date.now() + 23 * 60 * 60 * 1000,
+					expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
 				});
 
 				return url;
 			}
 
-			// Fallback на signed URL
+			// Fallback на signed URL только если публичный домен не настроен
 			const command = new GetObjectCommand({
 				Bucket: this.bucketName,
 				Key: fileKey,
@@ -125,7 +128,7 @@ export class StorageService {
 				expiresIn: 86400,
 			});
 
-			// Кэшируем на 23 часа
+			// Кэшируем на 23 часа для signed URLs
 			this.urlCache.set(cacheKey, {
 				url,
 				expiresAt: Date.now() + 23 * 60 * 60 * 1000,
@@ -139,7 +142,7 @@ export class StorageService {
 	}
 
 	/**
-	 * Получает множественные URL за один запрос
+	 * Получает множественные URL за один запрос с оптимизацией
 	 */
 	async getBatchUrls(
 		fileKeys: string[],
@@ -150,15 +153,122 @@ export class StorageService {
 			quality?: number;
 		} = {},
 	): Promise<Record<string, string>> {
+		if (!fileKeys.length) return {};
+
 		const result: Record<string, string> = {};
+		const uncachedKeys: string[] = [];
 
-		const promises = fileKeys.map(async (fileKey) => {
-			const url = await this.getOptimizedUrl(fileKey, options);
-			result[fileKey] = url;
-		});
+		// Сначала проверяем кэш для всех ключей
+		for (const fileKey of fileKeys) {
+			const cacheKey = `${fileKey}_${JSON.stringify(options)}`;
+			const cached = this.urlCache.get(cacheKey);
 
-		await Promise.all(promises);
+			if (cached && cached.expiresAt > Date.now()) {
+				result[fileKey] = cached.url;
+			} else {
+				uncachedKeys.push(fileKey);
+			}
+		}
+
+		// Если все URL есть в кэше, возвращаем результат
+		if (uncachedKeys.length === 0) {
+			return result;
+		}
+
+		// Для некэшированных ключей генерируем URL
+		if (
+			this.publicDomain &&
+			this.publicDomain !== `https://${this.bucketName}.r2.dev`
+		) {
+			// Используем публичный домен - быстро и без API вызовов
+			const params = new URLSearchParams();
+			if (options.width) params.set('w', options.width.toString());
+			if (options.height) params.set('h', options.height.toString());
+			if (options.format) params.set('f', options.format);
+			if (options.quality) params.set('q', options.quality.toString());
+
+			const paramString = params.toString() ? '?' + params.toString() : '';
+
+			for (const fileKey of uncachedKeys) {
+				const url = `${this.publicDomain}/${fileKey}${paramString}`;
+				const cacheKey = `${fileKey}_${JSON.stringify(options)}`;
+
+				// Кэшируем на 7 дней
+				this.urlCache.set(cacheKey, {
+					url,
+					expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
+				});
+
+				result[fileKey] = url;
+			}
+		} else {
+			// Fallback на signed URLs - генерируем параллельно
+			const promises = uncachedKeys.map(async (fileKey) => {
+				try {
+					const command = new GetObjectCommand({
+						Bucket: this.bucketName,
+						Key: fileKey,
+					});
+
+					const url = await getSignedUrl(this.s3Client, command, {
+						expiresIn: 86400,
+					});
+
+					const cacheKey = `${fileKey}_${JSON.stringify(options)}`;
+					this.urlCache.set(cacheKey, {
+						url,
+						expiresAt: Date.now() + 23 * 60 * 60 * 1000,
+					});
+
+					return { fileKey, url };
+				} catch (error) {
+					console.error(`Ошибка получения URL для ${fileKey}:`, error);
+					return { fileKey, url: '' };
+				}
+			});
+
+			const urls = await Promise.all(promises);
+			for (const { fileKey, url } of urls) {
+				result[fileKey] = url;
+			}
+		}
+
 		return result;
+	}
+
+	/**
+	 * Быстрое получение оптимизированного URL для аватаров/логотипов
+	 * Использует оптимальные настройки для быстрой загрузки
+	 */
+	async getFastImageUrl(
+		fileKey: string,
+		type: 'avatar' | 'logo' = 'avatar',
+	): Promise<string> {
+		if (!fileKey) return '';
+
+		const defaultOptions = {
+			avatar: { width: 150, height: 150, format: 'webp' as const, quality: 80 },
+			logo: { width: 200, height: 200, format: 'webp' as const, quality: 85 },
+		};
+
+		return this.getOptimizedUrl(fileKey, defaultOptions[type]);
+	}
+
+	/**
+	 * Батч-получение быстрых URL для аватаров/логотипов
+	 */
+	async getBatchFastUrls(
+		fileKeys: string[],
+		type: 'avatar' | 'logo' = 'avatar',
+	): Promise<Record<string, string>> {
+		if (!fileKeys.length) return {};
+
+		const defaultOptions = {
+			avatar: { width: 150, height: 150, format: 'webp' as const, quality: 80 },
+			logo: { width: 200, height: 200, format: 'webp' as const, quality: 85 },
+		};
+
+		return this.getBatchUrls(fileKeys, defaultOptions[type]);
 	}
 
 	/**

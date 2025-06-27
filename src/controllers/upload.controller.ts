@@ -112,3 +112,45 @@ export const getCacheStats = async (
 		});
 	}
 };
+
+/**
+ * Быстрое получение оптимизированных URL для изображений
+ */
+export const getFastImageUrls = async (
+	req: TelegramRequest,
+	res: Response,
+	next: NextFunction,
+): Promise<void> => {
+	try {
+		const { fileKeys, type = 'avatar' } = req.body;
+
+		if (!fileKeys || !Array.isArray(fileKeys)) {
+			res.status(400).json({
+				error: 'Список ключей файлов обязателен',
+			});
+			return;
+		}
+
+		if (!['avatar', 'logo'].includes(type)) {
+			res.status(400).json({
+				error: 'Тип изображения должен быть avatar или logo',
+			});
+			return;
+		}
+
+		const urls = await storageService.getBatchFastUrls(
+			fileKeys,
+			type as 'avatar' | 'logo',
+		);
+
+		res.json({
+			ok: true,
+			urls,
+		});
+	} catch (error: any) {
+		console.error('Ошибка получения быстрых URL:', error);
+		res.status(500).json({
+			error: 'Ошибка получения ссылок на файлы',
+		});
+	}
+};
