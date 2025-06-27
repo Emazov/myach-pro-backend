@@ -51,8 +51,10 @@ export class BotMessagingService {
 	 * Настройка обработчиков сообщений между процессами
 	 */
 	private setupMessageHandlers() {
-		if (cluster.isPrimary) {
-			// Master процесс: обрабатывает запросы от workers
+		const isMasterProcess = process.env.pm_id === '0';
+
+		if (isMasterProcess) {
+			// Master процесс (pm_id=0): обрабатывает запросы от workers
 			cluster.on('message', async (worker, message: ImageSendTask) => {
 				if (message.type === 'SEND_IMAGE') {
 					await this.handleImageSendTask(worker, message);
@@ -111,20 +113,32 @@ export class BotMessagingService {
 	}
 
 	/**
-	 * Отправка изображения (из worker процесса в master)
+	 * Отправка изображения (универсальный метод для PM2 кластера)
 	 */
 	public async sendImage(
 		chatId: number,
 		imageBuffer: Buffer,
 		caption: string,
 	): Promise<boolean> {
-		// Если мы в master процессе и бот доступен - отправляем напрямую
-		if (cluster.isPrimary && this.botService?.isBotAvailable()) {
-			return await this.botService.sendImage(chatId, imageBuffer, caption);
+		// В PM2 кластере процесс 0 является master с ботом
+		const isMasterProcess = process.env.pm_id === '0';
+
+		// Если мы в master процессе (pm_id=0) и бот доступен - отправляем напрямую
+		if (isMasterProcess && this.botService?.isBotAvailable()) {
+			try {
+				return await this.botService.sendImage(chatId, imageBuffer, caption);
+			} catch (error) {
+				logger.error(
+					'Ошибка прямой отправки в master процессе',
+					'TELEGRAM_BOT',
+					error as Error,
+				);
+				return false;
+			}
 		}
 
-		// Если мы в worker процессе - отправляем через IPC
-		if (!cluster.isPrimary) {
+		// Если мы в worker процессе - отправляем через IPC к процессу 0
+		if (!isMasterProcess) {
 			return new Promise((resolve) => {
 				const taskId = `${Date.now()}-${Math.random()}`;
 
