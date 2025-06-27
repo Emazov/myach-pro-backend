@@ -113,24 +113,44 @@ if (!isMainThread && parentPort) {
 				try {
 					// Оптимизируем производительность страницы
 					if (optimizeForSpeed) {
-						// Отключаем ненужные ресурсы
+						// Отключаем ненужные ресурсы, НО разрешаем изображения
 						await page.setRequestInterception(true);
 						page.on('request', (req) => {
 							const resourceType = req.resourceType();
+							const url = req.url();
+
+							// Логируем все запросы для диагностики
+							console.log(
+								`🌐 Puppeteer запрос: ${resourceType} -> ${url.substring(
+									0,
+									100,
+								)}...`,
+							);
+
 							if (
 								resourceType === 'stylesheet' ||
 								resourceType === 'font' ||
 								resourceType === 'script'
 							) {
 								// Пропускаем внешние ресурсы, используем только инлайн
-								if (
-									req.url().startsWith('http') &&
-									!req.url().startsWith('data:')
-								) {
+								if (url.startsWith('http') && !url.startsWith('data:')) {
+									console.log(
+										`❌ Блокируем ${resourceType}: ${url.substring(0, 50)}...`,
+									);
 									req.abort();
 									return;
 								}
 							}
+
+							// Разрешаем изображения (включая внешние URL аватарок)
+							if (resourceType === 'image') {
+								console.log(
+									`✅ Разрешаем изображение: ${url.substring(0, 50)}...`,
+								);
+								req.continue();
+								return;
+							}
+
 							req.continue();
 						});
 

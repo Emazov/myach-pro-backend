@@ -270,6 +270,10 @@ export class ImageGenerationService {
 	private async getClubAndPlayersData(data: ShareImageData) {
 		const storageService = new StorageService();
 
+		console.log('🔍 Начинаем получение данных клуба и игроков');
+		console.log('📦 Club ID:', data.clubId);
+		console.log('📋 Categories:', data.categorizedPlayerIds);
+
 		// Получаем клуб с подписанным URL логотипа
 		const club = await prisma.club.findUnique({
 			where: { id: data.clubId },
@@ -279,12 +283,26 @@ export class ImageGenerationService {
 			throw new Error('Клуб не найден');
 		}
 
+		console.log('🏢 Клуб найден:', club.name);
+		console.log('🖼️ Клуб имеет логотип:', !!club.logo);
+
 		// Получаем всех игроков одним запросом для оптимизации
 		const allPlayerIds = Object.values(data.categorizedPlayerIds).flat();
+		console.log('👥 Всего ID игроков:', allPlayerIds.length, allPlayerIds);
 
 		const players = await prisma.players.findMany({
 			where: { id: { in: allPlayerIds } },
 		});
+
+		console.log('🎮 Игроков найдено в БД:', players.length);
+		console.log(
+			'🎮 Игроки с аватарками:',
+			players.filter((p) => p.avatar).length,
+		);
+		console.log(
+			'📸 Ключи аватарок:',
+			players.map((p) => ({ name: p.name, avatar: p.avatar })),
+		);
 
 		// Собираем все ключи изображений для батч-обработки
 		const logoKeys = club.logo ? [club.logo] : [];
@@ -292,11 +310,18 @@ export class ImageGenerationService {
 			.map((player) => player.avatar)
 			.filter(Boolean) as string[];
 
+		console.log('🔑 Logo keys:', logoKeys);
+		console.log('🔑 Avatar keys:', avatarKeys);
+
 		// Получаем все URL за один раз
 		const [logoUrls, avatarUrls] = await Promise.all([
 			storageService.getBatchFastUrls(logoKeys, 'logo'),
 			storageService.getBatchFastUrls(avatarKeys, 'avatar'),
 		]);
+
+		console.log('🌐 Logo URLs:', logoUrls);
+		console.log('🌐 Avatar URLs получено:', Object.keys(avatarUrls).length);
+		console.log('🌐 Avatar URLs details:', avatarUrls);
 
 		const clubLogoUrl = club.logo ? logoUrls[club.logo] || '' : '';
 
@@ -306,12 +331,25 @@ export class ImageGenerationService {
 		for (const player of players) {
 			const avatarUrl = player.avatar ? avatarUrls[player.avatar] || '' : '';
 
+			console.log(
+				`👤 Игрок: ${player.name}, avatar key: ${player.avatar}, avatarUrl: ${
+					avatarUrl ? 'ЕСТЬ' : 'НЕТ'
+				}`,
+			);
+			if (avatarUrl) {
+				console.log(
+					`🔗 Avatar URL для ${player.name}: ${avatarUrl.substring(0, 100)}...`,
+				);
+			}
+
 			playersMap.set(player.id, {
 				id: player.id,
 				name: player.name,
 				avatarUrl,
 			});
 		}
+
+		console.log('✅ Карта игроков создана, размер:', playersMap.size);
 
 		return { club, clubLogoUrl, playersMap };
 	}
@@ -376,6 +414,15 @@ export class ImageGenerationService {
 									const playerAvatar =
 										player.avatarUrl ||
 										createPlayerAvatarPlaceholder(player.name);
+
+									console.log(`🎨 HTML для игрока ${player.name}:`);
+									console.log(
+										`   Оригинальный URL: ${player.avatarUrl || 'НЕТ'}`,
+									);
+									console.log(
+										`   Используемый src: ${playerAvatar.substring(0, 100)}...`,
+									);
+									console.log(`   Это плейсхолдер: ${!player.avatarUrl}`);
 
 									return `<img src="${playerAvatar}" alt="${
 										player.name
@@ -442,7 +489,7 @@ export class ImageGenerationService {
 		.container-logo {
 			display: flex;
 			justify-content: center;
-			margin-bottom: 20px;
+			margin-bottom: 25px;
 		}
 
 		.main-logo {
