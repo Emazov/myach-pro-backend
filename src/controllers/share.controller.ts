@@ -72,9 +72,15 @@ export class ShareController {
 				clubId: shareData.clubId,
 			};
 
-			// Генерируем изображение
+			// Генерируем изображение с теми же настройками что и для iOS
+			console.log('🎨 Генерация изображения для Android с высоким качеством');
 			const { imageBuffer, club } =
-				await imageGenerationService.generateResultsImage(imageData);
+				await imageGenerationService.generateResultsImage(imageData, {
+					quality: 98, // Высокое качество как для iOS
+					width: 550, // Оптимальная ширина для аватарок
+					height: 800, // Оптимальная высота
+					optimizeForSpeed: false, // ВАЖНО: отключаем оптимизацию для загрузки аватарок
+				});
 
 			// Проверяем размер изображения
 			const imageSizeMB = imageBuffer.length / (1024 * 1024);
