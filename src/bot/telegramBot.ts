@@ -1,6 +1,8 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { config } from '../config/env';
 import { logger } from '../utils/logger';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Класс для управления Telegram ботом
@@ -179,19 +181,180 @@ export class TelegramBotService {
 			return false;
 		}
 
+		// Проверяем размер изображения
+		const imageSizeMB = imageBuffer.length / (1024 * 1024);
+		logger.info(
+			`📷 Попытка отправки изображения: ${imageSizeMB.toFixed(
+				2,
+			)}MB для пользователя ${chatId}`,
+			'TELEGRAM_BOT',
+		);
+
+		// Если изображение слишком большое, пробуем уменьшить качество
+		if (imageSizeMB > 5) {
+			logger.warn(
+				`⚠️ Изображение слишком большое (${imageSizeMB.toFixed(
+					2,
+				)}MB), может быть проблема с отправкой`,
+				'TELEGRAM_BOT',
+			);
+		}
+
+		let attempt = 0;
+		const maxAttempts = 3;
+
+		while (attempt < maxAttempts) {
+			try {
+				attempt++;
+				logger.info(
+					`🔄 Попытка отправки #${attempt} для пользователя ${chatId}`,
+					'TELEGRAM_BOT',
+				);
+
+				// Используем setTimeout для разбивания цепочки вызовов
+				const result = await new Promise<boolean>((resolve, reject) => {
+					setTimeout(async () => {
+						try {
+							if (!this.bot) {
+								throw new Error('Бот недоступен');
+							}
+
+							await this.bot.sendPhoto(chatId, imageBuffer, {
+								caption: caption || 'Ваш тир-лист готов! 🎯',
+							});
+
+							logger.info(
+								`✅ Изображение успешно отправлено пользователю ${chatId} (попытка ${attempt})`,
+								'TELEGRAM_BOT',
+							);
+							resolve(true);
+						} catch (error) {
+							reject(error);
+						}
+					}, attempt * 1000); // Увеличиваем задержку с каждой попыткой
+				});
+
+				return result;
+			} catch (error) {
+				const errorMessage =
+					error instanceof Error ? error.message : String(error);
+
+				logger.error(
+					`❌ Ошибка отправки изображения (попытка ${attempt}/${maxAttempts}):`,
+					'TELEGRAM_BOT',
+					error,
+				);
+
+				// Если это переполнение стека, пробуем альтернативный метод
+				if (errorMessage.includes('Maximum call stack size exceeded')) {
+					logger.warn(
+						`🔄 Обнаружено переполнение стека, пробуем отправку через файл`,
+						'TELEGRAM_BOT',
+					);
+
+					try {
+						const fileResult = await this.sendImageViaFile(
+							chatId,
+							imageBuffer,
+							caption,
+						);
+						if (fileResult) {
+							logger.info(
+								`✅ Изображение успешно отправлено через файл после ошибки стека`,
+								'TELEGRAM_BOT',
+							);
+							return true;
+						}
+					} catch (fileError) {
+						logger.error(
+							'❌ Ошибка отправки через файл:',
+							'TELEGRAM_BOT',
+							fileError,
+						);
+					}
+
+					if (attempt < maxAttempts) {
+						await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+						continue;
+					}
+				}
+
+				// Если это последняя попытка или не переполнение стека
+				if (attempt >= maxAttempts) {
+					logger.error(
+						`❌ Не удалось отправить изображение после ${maxAttempts} попыток`,
+						'TELEGRAM_BOT',
+					);
+					return false;
+				}
+
+				// Ждем перед следующей попыткой
+				await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Альтернативный метод отправки изображения через временный файл
+	 * Используется как fallback при проблемах с Buffer
+	 */
+	private async sendImageViaFile(
+		chatId: number,
+		imageBuffer: Buffer,
+		caption?: string,
+	): Promise<boolean> {
+		const tempDir = path.join(process.cwd(), 'tmp');
+		const tempFileName = `temp_image_${Date.now()}_${Math.random()
+			.toString(36)
+			.substr(2, 9)}.jpg`;
+		const tempFilePath = path.join(tempDir, tempFileName);
+
 		try {
-			await this.bot.sendPhoto(chatId, imageBuffer, {
+			// Создаем папку tmp если её нет
+			if (!fs.existsSync(tempDir)) {
+				fs.mkdirSync(tempDir, { recursive: true });
+			}
+
+			// Записываем изображение во временный файл
+			fs.writeFileSync(tempFilePath, imageBuffer);
+
+			if (!this.bot) {
+				throw new Error('Бот недоступен');
+			}
+
+			// Отправляем файл
+			await this.bot.sendPhoto(chatId, tempFilePath, {
 				caption: caption || 'Ваш тир-лист готов! 🎯',
 			});
 
 			logger.info(
-				`✅ Изображение отправлено пользователю ${chatId}`,
+				`✅ Изображение отправлено через файл для пользователя ${chatId}`,
 				'TELEGRAM_BOT',
 			);
+
 			return true;
 		} catch (error) {
-			logger.error('❌ Ошибка отправки изображения:', 'TELEGRAM_BOT', error);
+			logger.error(
+				'❌ Ошибка отправки изображения через файл:',
+				'TELEGRAM_BOT',
+				error,
+			);
 			return false;
+		} finally {
+			// Удаляем временный файл
+			try {
+				if (fs.existsSync(tempFilePath)) {
+					fs.unlinkSync(tempFilePath);
+				}
+			} catch (cleanupError) {
+				logger.error(
+					'⚠️ Ошибка удаления временного файла:',
+					'TELEGRAM_BOT',
+					cleanupError,
+				);
+			}
 		}
 	}
 

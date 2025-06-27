@@ -84,48 +84,62 @@ export class SimpleBotMessagingService {
 	 * Обрабатывает одну задачу отправки изображения
 	 */
 	private async handleImageTask(task: ImageTask) {
+		let success = false;
+		let errorMessage = '';
+
 		try {
 			if (!this.botService?.isBotAvailable()) {
-				logger.error(
-					'Bot service недоступен при обработке задачи',
-					'TELEGRAM_BOT',
-				);
+				errorMessage = 'Bot service недоступен при обработке задачи';
+				logger.error(errorMessage, 'TELEGRAM_BOT');
 				return;
 			}
 
 			// Конвертируем base64 обратно в Buffer
 			const imageBuffer = Buffer.from(task.imageBuffer, 'base64');
+			const imageSizeMB = imageBuffer.length / (1024 * 1024);
 
-			// Отправляем изображение
-			const success = await this.botService.sendImage(
+			logger.info(
+				`🎯 Обработка задачи отправки изображения: ${imageSizeMB.toFixed(
+					2,
+				)}MB для пользователя ${task.chatId}`,
+				'TELEGRAM_BOT',
+			);
+
+			// Отправляем изображение (TelegramBotService сам обработает повторные попытки)
+			success = await this.botService.sendImage(
 				task.chatId,
 				imageBuffer,
 				task.caption,
 			);
 
-			// Сохраняем результат в Redis для worker процесса
-			await redisService.getClient().setex(
-				`image_result:${task.id}`,
-				30, // TTL 30 секунд
-				JSON.stringify({ success, timestamp: Date.now() }),
-			);
-
 			logger.imageSent(success, task.chatId.toString(), imageBuffer.length);
 		} catch (error) {
+			errorMessage = error instanceof Error ? error.message : String(error);
 			logger.error(
 				'Ошибка отправки изображения в задаче',
 				'TELEGRAM_BOT',
 				error as Error,
 			);
-
-			// Сохраняем ошибку
-			await redisService
-				.getClient()
-				.setex(
+			logger.imageSent(false, task.chatId.toString());
+		} finally {
+			// Сохраняем результат в Redis для worker процесса
+			try {
+				await redisService.getClient().setex(
 					`image_result:${task.id}`,
-					30,
-					JSON.stringify({ success: false, error: (error as Error).message }),
+					60, // Увеличиваем TTL до 60 секунд
+					JSON.stringify({
+						success,
+						timestamp: Date.now(),
+						error: errorMessage || undefined,
+					}),
 				);
+			} catch (redisError) {
+				logger.error(
+					'Ошибка сохранения результата в Redis',
+					'TELEGRAM_BOT',
+					redisError as Error,
+				);
+			}
 		}
 	}
 
@@ -176,8 +190,8 @@ export class SimpleBotMessagingService {
 				.getClient()
 				.rpush('image_send_queue', JSON.stringify(task));
 
-			// Ждем результат (максимум 20 секунд)
-			for (let i = 0; i < 200; i++) {
+			// Ждем результат (максимум 45 секунд - учитываем повторные попытки)
+			for (let i = 0; i < 450; i++) {
 				const result = await redisService
 					.getClient()
 					.get(`image_result:${taskId}`);
