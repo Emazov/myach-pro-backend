@@ -182,6 +182,14 @@ if (!isMainThread && parentPort) {
 						throw new Error('Скриншот пустой или не сгенерирован');
 					}
 
+					// Диагностика screenshot Buffer в worker
+					console.log(`🔬 Worker: Buffer диагностика:
+  - Размер: ${screenshot.length}
+  - Тип: ${typeof screenshot}
+  - Конструктор: ${screenshot.constructor.name}
+  - Buffer.isBuffer: ${Buffer.isBuffer(screenshot)}
+  - instanceof Buffer: ${screenshot instanceof Buffer}`);
+
 					// Проверяем что это валидный JPEG
 					const jpegHeader = screenshot.subarray(0, 3);
 					const isValidJPEG =
@@ -285,6 +293,14 @@ export async function generateImageInWorker(
 				worker.terminate();
 
 				if (result.success && result.imageBuffer) {
+					// Диагностика полученного Buffer из worker
+					console.log(`🔬 Main: Buffer из worker диагностика:
+  - Размер: ${result.imageBuffer.length}
+  - Тип: ${typeof result.imageBuffer}
+  - Конструктор: ${result.imageBuffer.constructor.name}
+  - Buffer.isBuffer: ${Buffer.isBuffer(result.imageBuffer)}
+  - instanceof Buffer: ${result.imageBuffer instanceof Buffer}`);
+
 					// Логируем статистику генерации
 					if (result.stats) {
 						console.log(

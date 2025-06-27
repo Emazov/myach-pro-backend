@@ -135,17 +135,89 @@ export class ShareController {
 					'IMAGE_GENERATION',
 				);
 
+				// Детальная диагностика Buffer
+				logger.info(`🔬 Детальная диагностика Buffer:`, 'IMAGE_GENERATION');
+				logger.info(`  - Существует: ${!!imageBuffer}`, 'IMAGE_GENERATION');
+				logger.info(`  - Тип: ${typeof imageBuffer}`, 'IMAGE_GENERATION');
+				logger.info(
+					`  - Конструктор: ${imageBuffer?.constructor?.name || 'undefined'}`,
+					'IMAGE_GENERATION',
+				);
+				logger.info(
+					`  - Длина: ${imageBuffer?.length || 'undefined'}`,
+					'IMAGE_GENERATION',
+				);
+				logger.info(
+					`  - Buffer.isBuffer: ${Buffer.isBuffer(imageBuffer)}`,
+					'IMAGE_GENERATION',
+				);
+				logger.info(
+					`  - instanceof Buffer: ${imageBuffer instanceof Buffer}`,
+					'IMAGE_GENERATION',
+				);
+				logger.info(
+					`  - toString метод: ${typeof imageBuffer?.toString}`,
+					'IMAGE_GENERATION',
+				);
+				logger.info(
+					`  - subarray метод: ${typeof imageBuffer?.subarray}`,
+					'IMAGE_GENERATION',
+				);
+
 				// Проверяем что Buffer всё ещё валидный
+				let validImageBuffer: Buffer;
 				if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
-					logger.error(
-						`❌ Buffer стал невалидным перед отправкой: существует=${!!imageBuffer}, тип=${typeof imageBuffer}`,
-						'IMAGE_GENERATION',
-					);
-					throw new Error('Buffer изображения поврежден перед отправкой');
+					// Попробуем восстановить Buffer если это возможно
+					if (
+						imageBuffer &&
+						typeof imageBuffer === 'object' &&
+						'length' in imageBuffer &&
+						'subarray' in imageBuffer &&
+						typeof (imageBuffer as any).length === 'number' &&
+						typeof (imageBuffer as any).subarray === 'function'
+					) {
+						logger.info(
+							`🔧 Попытка восстановления Buffer из объекта с данными`,
+							'IMAGE_GENERATION',
+						);
+
+						try {
+							// Попробуем создать новый Buffer из существующих данных
+							const restoredBuffer = Buffer.from(imageBuffer as any);
+
+							if (
+								Buffer.isBuffer(restoredBuffer) &&
+								restoredBuffer.length > 0
+							) {
+								logger.info(
+									`✅ Buffer успешно восстановлен: размер=${restoredBuffer.length}`,
+									'IMAGE_GENERATION',
+								);
+								validImageBuffer = restoredBuffer;
+							} else {
+								throw new Error('Восстановленный Buffer пустой или невалидный');
+							}
+						} catch (restoreError) {
+							logger.error(
+								`❌ Не удалось восстановить Buffer`,
+								'IMAGE_GENERATION',
+								restoreError as Error,
+							);
+							throw new Error('Buffer изображения поврежден перед отправкой');
+						}
+					} else {
+						logger.error(
+							`❌ Buffer стал невалидным перед отправкой: существует=${!!imageBuffer}, тип=${typeof imageBuffer}`,
+							'IMAGE_GENERATION',
+						);
+						throw new Error('Buffer изображения поврежден перед отправкой');
+					}
+				} else {
+					validImageBuffer = imageBuffer;
 				}
 
 				// Еще раз проверяем JPEG заголовок
-				const headerCheck = imageBuffer.subarray(0, 3);
+				const headerCheck = validImageBuffer.subarray(0, 3);
 				const stillValidJPEG =
 					headerCheck[0] === 0xff &&
 					headerCheck[1] === 0xd8 &&
@@ -170,7 +242,7 @@ export class ShareController {
 
 				// Дополнительный тест конвертации перед отправкой
 				const conversionTest = testBufferConversion(
-					imageBuffer,
+					validImageBuffer,
 					'финальное изображение',
 				);
 				if (!conversionTest) {
@@ -184,7 +256,7 @@ export class ShareController {
 				// Используем универсальный сервис отправки (работает в любом процессе)
 				const success = await simpleBotMessagingService.sendImage(
 					userId,
-					imageBuffer,
+					validImageBuffer,
 					caption,
 				);
 
@@ -193,7 +265,7 @@ export class ShareController {
 				}
 
 				// Логируем успешную отправку
-				logger.imageSent(true, userId.toString(), imageBuffer.length);
+				logger.imageSent(true, userId.toString(), validImageBuffer.length);
 			} catch (sendError) {
 				// Логируем ошибку отправки
 				logger.imageSent(false, userId?.toString());

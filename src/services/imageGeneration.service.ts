@@ -670,6 +670,23 @@ export class ImageGenerationService {
 			// Логируем результат через оптимизированный метод
 			logger.imageGenerated(true, undefined, duration);
 
+			// Диагностика Buffer сразу после генерации
+			logger.info(`🔬 Диагностика Buffer после генерации:`, 'IMAGE_GENERATION');
+			logger.info(`  - Размер: ${imageBuffer.length}`, 'IMAGE_GENERATION');
+			logger.info(`  - Тип: ${typeof imageBuffer}`, 'IMAGE_GENERATION');
+			logger.info(
+				`  - Конструктор: ${imageBuffer.constructor.name}`,
+				'IMAGE_GENERATION',
+			);
+			logger.info(
+				`  - Buffer.isBuffer: ${Buffer.isBuffer(imageBuffer)}`,
+				'IMAGE_GENERATION',
+			);
+			logger.info(
+				`  - instanceof Buffer: ${imageBuffer instanceof Buffer}`,
+				'IMAGE_GENERATION',
+			);
+
 			return {
 				imageBuffer,
 				club: { name: club.name },
