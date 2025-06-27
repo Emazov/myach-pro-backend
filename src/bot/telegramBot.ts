@@ -232,14 +232,6 @@ export class TelegramBotService {
 								]);
 							}
 
-							// Добавляем кнопку подписки на канал/бота (опционально)
-							inlineKeyboard.push([
-								{
-									text: '🤖 Подписаться на бота',
-									url: `https://t.me/${config.telegram.botUsername}`,
-								},
-							]);
-
 							await this.bot.sendPhoto(chatId, imageBuffer, {
 								caption: caption || 'Ваш тир-лист готов! 🎯',
 								reply_markup: {
@@ -360,14 +352,6 @@ export class TelegramBotService {
 					},
 				]);
 			}
-
-			// Добавляем кнопку подписки на канал/бота (опционально)
-			inlineKeyboard.push([
-				{
-					text: '🤖 Подписаться на бота',
-					url: `https://t.me/${config.telegram.botUsername}`,
-				},
-			]);
 
 			// Отправляем файл
 			await this.bot.sendPhoto(chatId, tempFilePath, {
