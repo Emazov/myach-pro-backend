@@ -17,6 +17,7 @@ export class SimpleBotMessagingService {
 	private static instance: SimpleBotMessagingService;
 	private botService: any = null;
 	private isProcessingTasks = false;
+	private taskProcessorInterval: NodeJS.Timeout | null = null;
 
 	private constructor() {
 		this.startTaskProcessor();
@@ -44,7 +45,13 @@ export class SimpleBotMessagingService {
 
 		if (isMasterProcess && !this.isProcessingTasks) {
 			this.isProcessingTasks = true;
-			this.processImageTasks();
+
+			// Используем setInterval вместо рекурсивных setTimeout для избежания переполнения стека
+			this.taskProcessorInterval = setInterval(async () => {
+				if (this.isProcessingTasks) {
+					await this.processImageTasks();
+				}
+			}, 100);
 		}
 	}
 
@@ -54,16 +61,14 @@ export class SimpleBotMessagingService {
 	private async processImageTasks() {
 		const isMasterProcess = process.env.pm_id === '0';
 
-		if (!isMasterProcess) return;
+		if (!isMasterProcess || !this.isProcessingTasks) return;
 
 		try {
-			// Получаем задачу из Redis очереди
-			const taskData = await redisService
-				.getClient()
-				.blpop('image_send_queue', 1);
+			// Получаем задачу из Redis очереди (неблокирующий вызов)
+			const taskData = await redisService.getClient().lpop('image_send_queue');
 
 			if (taskData) {
-				const task: ImageTask = JSON.parse(taskData[1]);
+				const task: ImageTask = JSON.parse(taskData);
 				await this.handleImageTask(task);
 			}
 		} catch (error) {
@@ -72,11 +77,6 @@ export class SimpleBotMessagingService {
 				'TELEGRAM_BOT',
 				error as Error,
 			);
-		}
-
-		// Продолжаем обработку
-		if (this.isProcessingTasks) {
-			setTimeout(() => this.processImageTasks(), 100);
 		}
 	}
 
@@ -142,13 +142,20 @@ export class SimpleBotMessagingService {
 		// Если мы в master процессе - отправляем напрямую
 		if (isMasterProcess && this.botService?.isBotAvailable()) {
 			try {
-				return await this.botService.sendImage(chatId, imageBuffer, caption);
+				const result = await this.botService.sendImage(
+					chatId,
+					imageBuffer,
+					caption,
+				);
+				logger.imageSent(result, chatId.toString(), imageBuffer.length);
+				return result;
 			} catch (error) {
 				logger.error(
 					'Ошибка прямой отправки в master процессе',
 					'TELEGRAM_BOT',
 					error as Error,
 				);
+				logger.imageSent(false, chatId.toString());
 				return false;
 			}
 		}
@@ -169,14 +176,19 @@ export class SimpleBotMessagingService {
 				.getClient()
 				.rpush('image_send_queue', JSON.stringify(task));
 
-			// Ждем результат (максимум 15 секунд)
-			for (let i = 0; i < 150; i++) {
+			// Ждем результат (максимум 20 секунд)
+			for (let i = 0; i < 200; i++) {
 				const result = await redisService
 					.getClient()
 					.get(`image_result:${taskId}`);
 				if (result) {
 					const parsed = JSON.parse(result);
 					await redisService.getClient().del(`image_result:${taskId}`);
+					logger.imageSent(
+						parsed.success === true,
+						chatId.toString(),
+						imageBuffer.length,
+					);
 					return parsed.success === true;
 				}
 				await new Promise((resolve) => setTimeout(resolve, 100));
@@ -186,6 +198,7 @@ export class SimpleBotMessagingService {
 				'Таймаут ожидания результата отправки изображения',
 				'TELEGRAM_BOT',
 			);
+			logger.imageSent(false, chatId.toString());
 			return false;
 		} catch (error) {
 			logger.error(
@@ -193,6 +206,7 @@ export class SimpleBotMessagingService {
 				'TELEGRAM_BOT',
 				error as Error,
 			);
+			logger.imageSent(false, chatId.toString());
 			return false;
 		}
 	}
@@ -202,6 +216,11 @@ export class SimpleBotMessagingService {
 	 */
 	public stop() {
 		this.isProcessingTasks = false;
+
+		if (this.taskProcessorInterval) {
+			clearInterval(this.taskProcessorInterval);
+			this.taskProcessorInterval = null;
+		}
 	}
 }
 
