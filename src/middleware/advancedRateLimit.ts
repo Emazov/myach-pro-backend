@@ -149,6 +149,29 @@ export const createRateLimit = {
 		}),
 
 	/**
+	 * Очень строгий лимит для отправки изображений в чат (shareResults)
+	 */
+	shareResults: () =>
+		new AdvancedRateLimit({
+			windowMs: 10 * 60 * 1000, // 10 минут
+			maxRequests: 3, // 3 отправки в чат за 10 минут
+			message:
+				'Превышен лимит отправки изображений в чат. Попробуйте через 10 минут.',
+			keyGenerator: (req: Request) => {
+				// Только по user ID для отправки в чат
+				const userId = (req as any).telegramUser?.id;
+				if (userId) {
+					return `rate_limit:share:user:${userId}`;
+				}
+
+				// Fallback на IP если нет user ID
+				const forwarded = req.headers['x-forwarded-for'];
+				const ip = (forwarded as string)?.split(',')[0] || req.ip || 'unknown';
+				return `rate_limit:share:ip:${ip}`;
+			},
+		}),
+
+	/**
 	 * Лимит для аутентификации
 	 */
 	auth: () =>

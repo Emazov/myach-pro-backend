@@ -21,7 +21,8 @@ export const createShareRoutes = (botService: TelegramBotService) => {
 	router.post(
 		'/results',
 		validateInitData,
-		imageRateLimit,
+		createRateLimit.shareResults().middleware(), // Строгий лимит для отправки в чат
+		imageRateLimit, // Общий лимит для генерации изображений
 		shareController.shareResults,
 	);
 
