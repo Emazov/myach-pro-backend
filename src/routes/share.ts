@@ -8,7 +8,7 @@ const router = express.Router();
  * POST /api/share/results
  * Генерирует изображение результатов и отправляет в Telegram
  */
-router.post('/results', shareController.shareResults);
+router.post('/results', validateInitData, shareController.shareResults);
 
 /**
  * POST /api/share/preview

@@ -28,36 +28,24 @@ export class ShareController {
 		let userId: number | undefined; // Определяем в начале для доступа в catch
 
 		try {
-			const { initData, shareData } = req.body;
+			const { shareData } = req.body;
+			const user = (req as any).user; // Данные пользователя из middleware
 
-			if (!initData || !shareData) {
+			if (!shareData) {
 				res.status(400).json({
-					error: 'Отсутствуют необходимые данные',
+					error: 'Отсутствуют данные для генерации изображения',
 				});
 				return;
 			}
 
-			// Валидируем initData
-			const validationResult = initDataUtils.validate(
-				initData,
-				config.telegram.botToken,
-			);
-			if (!validationResult.isValid) {
-				res.status(401).json({
-					error: 'Недействительные данные пользователя',
-				});
-				return;
-			}
-
-			const parsedData = initDataUtils.parse(initData);
-			userId = parsedData.user?.id;
-
-			if (!userId) {
+			if (!user || !user.id) {
 				res.status(400).json({
 					error: 'Не удалось получить ID пользователя',
 				});
 				return;
 			}
+
+			userId = user.id;
 
 			// Подготавливаем данные для генерации изображения
 			const imageData: ShareImageData = {
@@ -91,6 +79,11 @@ export class ShareController {
 				// КРИТИЧЕСКАЯ ПРОВЕРКА: Убеждаемся что бот инициализирован
 				if (!this.bot) {
 					throw new Error('Telegram бот не инициализирован');
+				}
+
+				// Проверяем что userId определен
+				if (!userId) {
+					throw new Error('ID пользователя не определен');
 				}
 
 				console.log(
@@ -149,6 +142,11 @@ export class ShareController {
 				console.log(`💾 Временный файл создан: ${tempFilePath}`);
 
 				try {
+					// Проверяем что userId определен перед отправкой через файл
+					if (!userId) {
+						throw new Error('ID пользователя не определен для отправки файла');
+					}
+
 					// Отправляем через файл
 					const fileResult = await this.bot.sendPhoto(userId, tempFilePath, {
 						caption,
