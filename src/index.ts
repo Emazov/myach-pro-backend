@@ -55,7 +55,7 @@ const initApp = () => {
 	// Логируем CORS конфигурацию для отладки
 	logger.info(`CORS origins: ${JSON.stringify(config.cors.origins)}`, 'CORS');
 
-	// Настраиваем middleware
+	// Настраиваем middleware ee 
 	app.use(
 		cors({
 			origin: config.cors.origins,
