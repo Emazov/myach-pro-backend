@@ -26,7 +26,7 @@ import playersRoutes from './routes/players';
 import adminRoutes from './routes/admin';
 import analyticsRoutes from './routes/analytics';
 import uploadRoutes from './routes/upload';
-import shareRoutes from './routes/share';
+import { shareRoutes } from './routes/share';
 import healthRoutes from './routes/health';
 import { errorHandler } from './utils/errorHandler';
 
@@ -112,10 +112,20 @@ const initApp = () => {
 		}
 	}, 30 * 60 * 1000); // 30 минут
 
-	// Очищаем интервал при выключении приложения
+	// Запускаем периодическую очистку кэша изображений (каждые 2 часа)
+	const imageCacheCleanupInterval = setInterval(() => {
+		try {
+			imageGenerationService.cleanExpiredCache();
+		} catch (error) {
+			logger.error('Ошибка при очистке кэша изображений', 'CLEANUP', error);
+		}
+	}, 2 * 60 * 60 * 1000); // 2 часа
+
+	// Очищаем интервалы при выключении приложения
 	process.on('SIGINT', async () => {
 		logger.shutdown('Получен сигнал SIGINT, завершение работы...');
 		clearInterval(cleanupInterval);
+		clearInterval(imageCacheCleanupInterval);
 		await imageGenerationService.cleanup();
 		process.exit(0);
 	});
@@ -123,6 +133,7 @@ const initApp = () => {
 	process.on('SIGTERM', async () => {
 		logger.shutdown('Получен сигнал SIGTERM, завершение работы...');
 		clearInterval(cleanupInterval);
+		clearInterval(imageCacheCleanupInterval);
 		await imageGenerationService.cleanup();
 		process.exit(0);
 	});

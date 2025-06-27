@@ -12,6 +12,14 @@ export interface ShareImageData {
 	clubId: string;
 }
 
+// Настройки качества изображения
+export interface ImageQualityOptions {
+	quality?: number; // 1-100, по умолчанию 85
+	width?: number; // ширина в пикселях, по умолчанию 600
+	height?: number; // высота в пикселях, по умолчанию 800
+	optimizeForSpeed?: boolean; // оптимизация для скорости, по умолчанию true
+}
+
 /**
  * Создает SVG плейсхолдер для аватара игрока
  */
@@ -54,15 +62,17 @@ function createPlayerAvatarPlaceholder(playerName: string): string {
 export class ImageGenerationService {
 	private static instance: ImageGenerationService;
 
-	// Кэш для ресурсов
+	// Кэш для ресурсов с TTL
 	private resourcesCache: {
-		fonts: Map<string, string>;
-		images: Map<string, string>;
+		fonts: Map<string, { data: string; timestamp: number }>;
+		images: Map<string, { data: string; timestamp: number }>;
 		isInitialized: boolean;
+		ttl: number; // время жизни кэша в миллисекундах (1 час)
 	} = {
 		fonts: new Map(),
 		images: new Map(),
 		isInitialized: false,
+		ttl: 60 * 60 * 1000, // 1 час
 	};
 
 	private constructor() {}
@@ -72,6 +82,13 @@ export class ImageGenerationService {
 			ImageGenerationService.instance = new ImageGenerationService();
 		}
 		return ImageGenerationService.instance;
+	}
+
+	/**
+	 * Проверяет, актуален ли кэш
+	 */
+	private isCacheValid(timestamp: number): boolean {
+		return Date.now() - timestamp < this.resourcesCache.ttl;
 	}
 
 	/**
@@ -99,6 +116,7 @@ export class ImageGenerationService {
 			await Promise.all([...fontPromises, ...imagePromises]);
 
 			this.resourcesCache.isInitialized = true;
+			console.log('✅ Ресурсы для генерации изображений инициализированы');
 		} catch (error) {
 			console.error('❌ Ошибка при инициализации ресурсов:', error);
 			// Продолжаем работу даже с ошибками
@@ -112,8 +130,9 @@ export class ImageGenerationService {
 	private async loadFontAsBase64(fontFileName: string): Promise<string> {
 		try {
 			// Проверяем кэш
-			if (this.resourcesCache.fonts.has(fontFileName)) {
-				return this.resourcesCache.fonts.get(fontFileName)!;
+			const cached = this.resourcesCache.fonts.get(fontFileName);
+			if (cached && this.isCacheValid(cached.timestamp)) {
+				return cached.data;
 			}
 
 			// Путь к шрифтам относительно корня проекта
@@ -128,8 +147,11 @@ export class ImageGenerationService {
 			try {
 				await fs.promises.access(fontPath);
 			} catch {
-				console.warn(`Шрифт не найден: ${fontPath}`);
-				this.resourcesCache.fonts.set(fontFileName, '');
+				console.warn(`⚠️ Шрифт не найден: ${fontPath}`);
+				this.resourcesCache.fonts.set(fontFileName, {
+					data: '',
+					timestamp: Date.now(),
+				});
 				return '';
 			}
 
@@ -137,12 +159,18 @@ export class ImageGenerationService {
 			const fontBuffer = await fs.promises.readFile(fontPath);
 			const base64Font = fontBuffer.toString('base64');
 
-			// Кэшируем результат
-			this.resourcesCache.fonts.set(fontFileName, base64Font);
+			// Кэшируем результат с временной меткой
+			this.resourcesCache.fonts.set(fontFileName, {
+				data: base64Font,
+				timestamp: Date.now(),
+			});
 			return base64Font;
 		} catch (error) {
-			console.error('Ошибка при загрузке шрифта:', error);
-			this.resourcesCache.fonts.set(fontFileName, '');
+			console.error('❌ Ошибка при загрузке шрифта:', error);
+			this.resourcesCache.fonts.set(fontFileName, {
+				data: '',
+				timestamp: Date.now(),
+			});
 			return '';
 		}
 	}
@@ -153,8 +181,9 @@ export class ImageGenerationService {
 	private async loadImageAsBase64(imageFileName: string): Promise<string> {
 		try {
 			// Проверяем кэш
-			if (this.resourcesCache.images.has(imageFileName)) {
-				return this.resourcesCache.images.get(imageFileName)!;
+			const cached = this.resourcesCache.images.get(imageFileName);
+			if (cached && this.isCacheValid(cached.timestamp)) {
+				return cached.data;
 			}
 
 			// Путь к изображениям относительно корня проекта
@@ -164,8 +193,11 @@ export class ImageGenerationService {
 			try {
 				await fs.promises.access(imagePath);
 			} catch {
-				console.warn(`Изображение не найдено: ${imagePath}`);
-				this.resourcesCache.images.set(imageFileName, '');
+				console.warn(`⚠️ Изображение не найдено: ${imagePath}`);
+				this.resourcesCache.images.set(imageFileName, {
+					data: '',
+					timestamp: Date.now(),
+				});
 				return '';
 			}
 
@@ -185,12 +217,18 @@ export class ImageGenerationService {
 				'base64',
 			)}`;
 
-			// Кэшируем результат
-			this.resourcesCache.images.set(imageFileName, dataUri);
+			// Кэшируем результат с временной меткой
+			this.resourcesCache.images.set(imageFileName, {
+				data: dataUri,
+				timestamp: Date.now(),
+			});
 			return dataUri;
 		} catch (error) {
-			console.error('Ошибка при загрузке изображения:', error);
-			this.resourcesCache.images.set(imageFileName, '');
+			console.error('❌ Ошибка при загрузке изображения:', error);
+			this.resourcesCache.images.set(imageFileName, {
+				data: '',
+				timestamp: Date.now(),
+			});
 			return '';
 		}
 	}
@@ -227,7 +265,7 @@ export class ImageGenerationService {
 	}
 
 	/**
-	 * Получает данные клуба и игроков из базы данных
+	 * Получает данные клуба и игроков из базы данных с кэшированием
 	 */
 	private async getClubAndPlayersData(data: ShareImageData) {
 		const storageService = new StorageService();
@@ -279,9 +317,12 @@ export class ImageGenerationService {
 	}
 
 	/**
-	 * Генерирует HTML для рендера изображения
+	 * Генерирует оптимизированный HTML для рендера изображения
 	 */
-	private async generateHTML(data: ShareImageData): Promise<string> {
+	private async generateHTML(
+		data: ShareImageData,
+		options: ImageQualityOptions = {},
+	): Promise<string> {
 		const { club, clubLogoUrl, playersMap } = await this.getClubAndPlayersData(
 			data,
 		);
@@ -293,13 +334,29 @@ export class ImageGenerationService {
 		try {
 			fontFaces = await this.generateFontFaces();
 		} catch (error) {
-			console.error('Ошибка при загрузке шрифтов:', error);
+			console.error('❌ Ошибка при загрузке шрифтов:', error);
 			// Продолжаем работу без локальных шрифтов
 		}
 
 		// Загружаем локальные изображения в base64 (теперь из кэша)
 		const backgroundImage = await this.loadImageAsBase64('main_bg.jpg');
 		const mainLogo = await this.loadImageAsBase64('main_logo.png');
+
+		// Функция обработки названия клуба
+		const getDisplayClubName = (clubName: string): string => {
+			const hasClub = clubName.toLowerCase().includes('клуб');
+			const seasonMatch = clubName.match(/(\d{4}\/\d{2})/);
+
+			if (hasClub && seasonMatch) {
+				const season = seasonMatch[1];
+				return `Твой тир-лист клубов сезона ${season}`;
+			}
+
+			return clubName;
+		};
+
+		const displayClubName = getDisplayClubName(club.name);
+		const showClubLogo = displayClubName === club.name;
 
 		const playersHTML = data.categories
 			.map((category) => {
@@ -308,11 +365,11 @@ export class ImageGenerationService {
 				const playersListHTML =
 					playerIds.length > 0
 						? playerIds
-								.map((playerId, index) => {
+								.map((playerId) => {
 									const player = playersMap.get(playerId);
 
 									if (!player) {
-										console.warn(`Игрок с ID ${playerId} не найден`);
+										console.warn(`⚠️ Игрок с ID ${playerId} не найден`);
 										return '';
 									}
 
@@ -320,13 +377,11 @@ export class ImageGenerationService {
 										player.avatarUrl ||
 										createPlayerAvatarPlaceholder(player.name);
 
-									return `
-              <img src="${playerAvatar}" alt="${
+									return `<img src="${playerAvatar}" alt="${
 										player.name
 									}" class="player-avatar" onerror="this.src='${createPlayerAvatarPlaceholder(
 										player.name,
-									)}'" />
-          `;
+									)}'" />`;
 								})
 								.filter((html) => html !== '') // Убираем пустые строки
 								.join('')
@@ -337,7 +392,6 @@ export class ImageGenerationService {
 					category.color
 				}">
         	<span class="category-title">${category.name.toUpperCase()}</span>
-        
           	<div class="category-players">
             	${playersListHTML}
           	</div>
@@ -362,18 +416,18 @@ export class ImageGenerationService {
 		}
 
 		body {
-			font-family: 'Montserrat', sans-serif;
+			font-family: 'Montserrat', 'Arial', sans-serif;
 			${
 				backgroundImage
 					? `background: url('${backgroundImage}') no-repeat center center;`
-					: 'background: #1a1a1a;'
+					: 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);'
 			}
 			background-size: cover;
-			max-width: 600px;
-			height: 100vh;
+			width: ${options.width || 600}px;
+			height: ${options.height || 800}px;
 			color: white;
 			padding: 20px;
-
+			overflow: hidden;
 		}
 
 		.container {
@@ -388,18 +442,23 @@ export class ImageGenerationService {
 		.container-logo {
 			display: flex;
 			justify-content: center;
+			margin-bottom: 20px;
 		}
 
 		.main-logo {
 			width: 140px;
-			object-fit: cover;
+			height: auto;
+			object-fit: contain;
 		}
 
 		.content {
-			background: #ffffff;
+			background: rgba(255, 255, 255, 0.98);
 			border-radius: 25px;
-			padding: 10px;
+			padding: 20px;
 			width: 100%;
+			max-height: calc(100% - 200px);
+			overflow: hidden;
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 		}
 
 		.tier-list-header {
@@ -407,56 +466,89 @@ export class ImageGenerationService {
 			align-items: center;
 			justify-content: center;
 			gap: 12px;
+			margin-bottom: 20px;
 		}
 
 		.club-logo {
 			width: 50px;
+			height: 50px;
+			object-fit: contain;
+			border-radius: 8px;
 		}
 
 		.club-name {
-			font-size: 32px;
+			font-size: ${options.width && options.width > 600 ? '36px' : '28px'};
 			font-weight: bold;
-			color: #000;
+			color: #1a1a1a;
+			text-align: center;
+			line-height: 1.2;
+		}
+
+		.categories {
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
 		}
 
 		.category-section {
-			margin-top: 15px;
 			border-radius: 15px;
 			overflow: hidden;
-			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-
-			padding: 5px 5px 5px 10px;
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+			padding: 8px 8px 8px 15px;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
 			color: white;
 			font-weight: bold;
+			min-height: 70px;
 		}
 
 		.category-title {
-			font-size: 28px;
+			font-size: ${options.width && options.width > 600 ? '24px' : '20px'};
+			font-weight: 700;
+			text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+			flex-shrink: 0;
+			min-width: 100px;
 		}
 
 		.category-players {
 			display: grid;
 			grid-template-columns: repeat(6, minmax(0, 1fr));
-			gap: 5px
+			gap: 6px;
+			flex: 1;
+			max-width: calc(100% - 120px);
 		}
 
 		.player-avatar {
-			width: 50px;
-			border-radius: 10px;
+			width: ${options.width && options.width > 600 ? '55px' : '45px'};
+			height: ${options.width && options.width > 600 ? '70px' : '60px'};
+			border-radius: 8px;
 			object-fit: cover;
+			border: 2px solid rgba(255, 255, 255, 0.8);
+			box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 		}
 
 		.empty-category {
-			color: #999;
+			color: rgba(255, 255, 255, 0.8);
 			font-style: italic;
 			font-size: 16px;
+			text-align: center;
+			grid-column: 1 / -1;
 		}
 
 		.footer {
-			height: 100px;
+			height: 40px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			margin-top: 20px;
+		}
+
+		.watermark {
+			color: rgba(255, 255, 255, 0.8);
+			font-size: 14px;
+			font-weight: 500;
+			text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 		}
 	</style>
     </head>
@@ -469,11 +561,11 @@ export class ImageGenerationService {
 				<div class="content">
             		<div class="tier-list-header">
                         ${
-													clubLogoUrl
+													showClubLogo && clubLogoUrl
 														? `<img src="${clubLogoUrl}" alt="Логотип" class="club-logo" />`
 														: ''
 												}
-                		<span class="club-name">${club.name}</span>
+                		<div class="club-name">${displayClubName}</div>
             		</div>
             
             		<div class="categories">
@@ -481,7 +573,11 @@ export class ImageGenerationService {
             		</div>
           		</div>
           
-          		<div class="footer"></div>
+          		<div class="footer">
+					<div class="watermark">@${
+						process.env.TELEGRAM_BOT_USERNAME || 'myach_pro_bot'
+					}</div>
+				</div>
         	</div>
       </body>
       </html>
@@ -489,38 +585,85 @@ export class ImageGenerationService {
 	}
 
 	/**
-	 * Генерирует изображение на основе данных (неблокирующая версия с Worker)
+	 * Генерирует изображение на основе данных с настройками качества
 	 */
 	public async generateResultsImage(
 		data: ShareImageData,
+		options: ImageQualityOptions = {},
 	): Promise<{ imageBuffer: Buffer; club: { name: string } }> {
 		try {
+			// Устанавливаем значения по умолчанию
+			const defaultOptions: Required<ImageQualityOptions> = {
+				quality: 85,
+				width: 600,
+				height: 800,
+				optimizeForSpeed: true,
+			};
+
+			const finalOptions = { ...defaultOptions, ...options };
+
+			console.log(
+				`🎨 Генерация изображения: ${finalOptions.width}x${finalOptions.height}, качество: ${finalOptions.quality}%`,
+			);
+
 			// Сначала получаем данные клуба
 			const { club } = await this.getClubAndPlayersData(data);
 
 			// Генерируем HTML
-			const html = await this.generateHTML(data);
+			const html = await this.generateHTML(data, finalOptions);
 
-			// Генерируем изображение в отдельном Worker потоке (оптимизированный размер)
-			const imageBuffer = await generateImageInWorker(html, 600, 800);
+			// Генерируем изображение в отдельном Worker потоке
+			const imageBuffer = await generateImageInWorker(
+				html,
+				finalOptions.width,
+				finalOptions.height,
+				finalOptions.quality,
+				finalOptions.optimizeForSpeed,
+			);
+
+			console.log(`✅ Изображение сгенерировано: ${imageBuffer.length} байт`);
 
 			return {
 				imageBuffer,
 				club: { name: club.name },
 			};
 		} catch (error) {
-			console.error('Ошибка при генерации изображения:', error);
+			console.error('❌ Ошибка при генерации изображения:', error);
 			throw error;
 		}
 	}
 
 	/**
-	 * Очищает кэш ресурсов при завершении работы
+	 * Очищает устаревший кэш ресурсов
+	 */
+	public cleanExpiredCache() {
+		const now = Date.now();
+
+		// Очищаем устаревшие шрифты
+		for (const [key, value] of this.resourcesCache.fonts.entries()) {
+			if (!this.isCacheValid(value.timestamp)) {
+				this.resourcesCache.fonts.delete(key);
+			}
+		}
+
+		// Очищаем устаревшие изображения
+		for (const [key, value] of this.resourcesCache.images.entries()) {
+			if (!this.isCacheValid(value.timestamp)) {
+				this.resourcesCache.images.delete(key);
+			}
+		}
+
+		console.log(`🧹 Очищен устаревший кэш ресурсов`);
+	}
+
+	/**
+	 * Полная очистка кэша при завершении работы
 	 */
 	public async cleanup() {
 		this.resourcesCache.fonts.clear();
 		this.resourcesCache.images.clear();
 		this.resourcesCache.isInitialized = false;
+		console.log('🧹 Кэш ресурсов полностью очищен');
 	}
 }
 

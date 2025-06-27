@@ -9,6 +9,7 @@ import { config } from '../config/env';
 import { Readable } from 'stream';
 import fs from 'fs';
 import path from 'path';
+import { logger } from '../utils/logger';
 
 /**
  * Контроллер для обработки функций шаринга
@@ -162,35 +163,91 @@ export class ShareController {
 	};
 
 	/**
-	 * Предварительный просмотр изображения (для тестирования)
+	 * Предварительный просмотр изображения (сжатое)
 	 */
 	public previewImage = async (req: Request, res: Response) => {
 		try {
-			const shareData = req.body;
+			const { categorizedPlayerIds, categories, clubId } = req.body;
 
-			if (!shareData) {
+			if (!categorizedPlayerIds || !categories || !clubId) {
 				res.status(400).json({
-					error: 'Отсутствуют данные для генерации изображения',
+					error: 'Отсутствуют обязательные параметры',
 				});
 				return;
 			}
 
-			const imageData: ShareImageData = {
-				categorizedPlayerIds: shareData.categorizedPlayerIds,
-				categories: shareData.categories,
-				clubId: shareData.clubId,
-			};
-
 			const { imageBuffer } = await imageGenerationService.generateResultsImage(
-				imageData,
+				{
+					categorizedPlayerIds,
+					categories,
+					clubId,
+				},
+				{ quality: 75, width: 600, height: 800 }, // Сжатое качество для превью
 			);
 
-			res.set('Content-Type', 'image/jpeg');
+			res.set({
+				'Content-Type': 'image/jpeg',
+				'Content-Length': imageBuffer.length.toString(),
+				'Cache-Control': 'no-cache',
+			});
+
 			res.send(imageBuffer);
 		} catch (error) {
-			console.error('Ошибка при генерации изображения:', error);
+			logger.error(
+				'Ошибка при генерации превью изображения:',
+				error instanceof Error ? error.message : String(error),
+			);
 			res.status(500).json({
-				error: 'Произошла ошибка при генерации изображения',
+				error: 'Не удалось сгенерировать изображение',
+			});
+		}
+	};
+
+	/**
+	 * Изображение в высоком качестве для скачивания/шэринга
+	 */
+	public downloadImage = async (req: Request, res: Response) => {
+		try {
+			const { categorizedPlayerIds, categories, clubId } = req.body;
+
+			if (!categorizedPlayerIds || !categories || !clubId) {
+				res.status(400).json({
+					error: 'Отсутствуют обязательные параметры',
+				});
+				return;
+			}
+
+			const { imageBuffer, club } =
+				await imageGenerationService.generateResultsImage(
+					{
+						categorizedPlayerIds,
+						categories,
+						clubId,
+					},
+					{ quality: 95, width: 800, height: 1000 }, // Высокое качество для шэринга
+				);
+
+			// Формируем имя файла
+			const fileName = `tier-list-${club.name.replace(
+				/[^a-zA-Zа-яА-Я0-9]/g,
+				'-',
+			)}.jpg`;
+
+			res.set({
+				'Content-Type': 'image/jpeg',
+				'Content-Length': imageBuffer.length.toString(),
+				'Content-Disposition': `attachment; filename="${fileName}"`,
+				'Cache-Control': 'private, max-age=3600', // Кэшируем на час
+			});
+
+			res.send(imageBuffer);
+		} catch (error) {
+			logger.error(
+				'Ошибка при генерации изображения для скачивания:',
+				error instanceof Error ? error.message : String(error),
+			);
+			res.status(500).json({
+				error: 'Не удалось сгенерировать изображение',
 			});
 		}
 	};
