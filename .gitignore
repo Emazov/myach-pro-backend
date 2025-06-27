@@ -3,4 +3,4 @@ node_modules
 .env
 generated
 dist
-deploy
+deploy_setup
