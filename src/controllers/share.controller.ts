@@ -25,6 +25,8 @@ export class ShareController {
 	 * Генерирует изображение результатов и отправляет в Telegram
 	 */
 	public shareResults = async (req: Request, res: Response) => {
+		let userId: number | undefined; // Определяем в начале для доступа в catch
+
 		try {
 			const { initData, shareData } = req.body;
 
@@ -48,7 +50,7 @@ export class ShareController {
 			}
 
 			const parsedData = initDataUtils.parse(initData);
-			const userId = parsedData.user?.id;
+			userId = parsedData.user?.id;
 
 			if (!userId) {
 				res.status(400).json({
@@ -86,6 +88,17 @@ export class ShareController {
 			}`;
 
 			try {
+				// КРИТИЧЕСКАЯ ПРОВЕРКА: Убеждаемся что бот инициализирован
+				if (!this.bot) {
+					throw new Error('Telegram бот не инициализирован');
+				}
+
+				console.log(
+					`📤 Отправка изображения в Telegram для пользователя: ${userId}`,
+				);
+				console.log(`📝 Размер изображения: ${imageBuffer.length} байт`);
+				console.log(`🤖 Бот инициализирован: ${!!this.bot}`);
+
 				// Пытаемся отправить через Stream (рекомендуемый способ)
 				const imageStream = new Readable({
 					read() {},
@@ -93,7 +106,7 @@ export class ShareController {
 				imageStream.push(imageBuffer);
 				imageStream.push(null);
 
-				await this.bot.sendPhoto(userId, imageStream, {
+				const result = await this.bot.sendPhoto(userId, imageStream, {
 					caption,
 					reply_markup: {
 						inline_keyboard: [
@@ -106,10 +119,21 @@ export class ShareController {
 						],
 					},
 				});
-			} catch (streamError) {
-				console.warn(
-					'Не удалось отправить через Stream, пробуем через временный файл',
+
+				console.log(
+					`✅ Изображение успешно отправлено через Stream, message_id: ${result.message_id}`,
 				);
+			} catch (streamError) {
+				console.error('❌ Ошибка отправки через Stream:', {
+					error:
+						streamError instanceof Error
+							? streamError.message
+							: String(streamError),
+					userId,
+					imageSize: imageBuffer.length,
+				});
+
+				console.warn('🔄 Пробуем отправить через временный файл...');
 
 				// Fallback: создаем временный файл
 				const tempFileName = `tier-list-${userId}-${Date.now()}.jpg`;
@@ -122,10 +146,11 @@ export class ShareController {
 
 				// Записываем изображение во временный файл
 				await fs.promises.writeFile(tempFilePath, imageBuffer);
+				console.log(`💾 Временный файл создан: ${tempFilePath}`);
 
 				try {
 					// Отправляем через файл
-					await this.bot.sendPhoto(userId, tempFilePath, {
+					const fileResult = await this.bot.sendPhoto(userId, tempFilePath, {
 						caption,
 						reply_markup: {
 							inline_keyboard: [
@@ -138,12 +163,23 @@ export class ShareController {
 							],
 						},
 					});
+
+					console.log(
+						`✅ Изображение успешно отправлено через файл, message_id: ${fileResult.message_id}`,
+					);
 				} finally {
 					// Удаляем временный файл
 					try {
 						await fs.promises.unlink(tempFilePath);
+						console.log(`🗑️ Временный файл удален: ${tempFilePath}`);
 					} catch (unlinkError) {
-						console.warn('Не удалось удалить временный файл:', unlinkError);
+						console.warn('⚠️ Не удалось удалить временный файл:', {
+							file: tempFilePath,
+							error:
+								unlinkError instanceof Error
+									? unlinkError.message
+									: String(unlinkError),
+						});
 					}
 				}
 			}
@@ -155,7 +191,14 @@ export class ShareController {
 				closeWebApp: true,
 			});
 		} catch (error) {
-			console.error('Ошибка при генерации и отправке изображения:', error);
+			console.error(
+				'❌ Критическая ошибка при генерации и отправке изображения:',
+				{
+					error: error instanceof Error ? error.message : String(error),
+					stack: error instanceof Error ? error.stack : undefined,
+					userId,
+				},
+			);
 			res.status(500).json({
 				error: 'Произошла ошибка при обработке запроса',
 			});
@@ -182,7 +225,7 @@ export class ShareController {
 					categories,
 					clubId,
 				},
-				{ quality: 75, width: 600, height: 800 }, // Сжатое качество для превью
+				{ quality: 75, width: 500, height: 800 }, // Сжатое качество для превью
 			);
 
 			res.set({
@@ -229,9 +272,9 @@ export class ShareController {
 						clubId,
 					},
 					{
-						quality: 95, // Высокое качество
-						width: 600, // Компактная ширина
-						height: 800, // Компактная высота
+						quality: 98, // Еще выше качество для аватарок
+						width: 500, // Компактная ширина
+						height: 800, // Оптимальная высота
 						optimizeForSpeed: false, // Отключаем оптимизацию для лучшего качества
 					},
 				);

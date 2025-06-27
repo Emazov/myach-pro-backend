@@ -15,7 +15,7 @@ export interface ShareImageData {
 // Настройки качества изображения
 export interface ImageQualityOptions {
 	quality?: number; // 1-100, по умолчанию 85
-	width?: number; // ширина в пикселях, по умолчанию 600
+	width?: number; // ширина в пикселях, по умолчанию 500
 	height?: number; // высота в пикселях, по умолчанию 800
 	optimizeForSpeed?: boolean; // оптимизация для скорости, по умолчанию true
 }
@@ -342,14 +342,14 @@ export class ImageGenerationService {
 		const backgroundImage = await this.loadImageAsBase64('main_bg.jpg');
 		const mainLogo = await this.loadImageAsBase64('main_logo.png');
 
-		// Функция обработки названия клуба
+		// Функция обработки названия клуба (синхронизировано с клиентом)
 		const getDisplayClubName = (clubName: string): string => {
 			const hasClub = clubName.toLowerCase().includes('клуб');
 			const seasonMatch = clubName.match(/(\d{4}\/\d{2})/);
 
 			if (hasClub && seasonMatch) {
 				const season = seasonMatch[1];
-				return `Твой тир-лист клубов сезона ${season}`;
+				return `Мой тир-лист клубов ${season}`;
 			}
 
 			return clubName;
@@ -520,12 +520,14 @@ export class ImageGenerationService {
 		}
 
 		.player-avatar {
-			width: ${options.width && options.width > 600 ? '55px' : '45px'};
-			height: ${options.width && options.width > 600 ? '70px' : '60px'};
+			width: ${options.width && options.width >= 500 ? '50px' : '45px'};
+			height: ${options.width && options.width >= 500 ? '65px' : '60px'};
 			border-radius: 8px;
 			object-fit: cover;
 			border: 2px solid rgba(255, 255, 255, 0.8);
 			box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+			image-rendering: -webkit-optimize-contrast; /* Улучшенное качество рендеринга */
+			image-rendering: crisp-edges;
 		}
 
 		.empty-category {
@@ -595,7 +597,7 @@ export class ImageGenerationService {
 			// Устанавливаем значения по умолчанию (оптимизированные размеры)
 			const defaultOptions: Required<ImageQualityOptions> = {
 				quality: 85,
-				width: 600, // Компактный размер по умолчанию
+				width: 500, // Компактный размер по умолчанию
 				height: 800, // Оптимальное соотношение сторон
 				optimizeForSpeed: true,
 			};

@@ -138,17 +138,17 @@ if (!isMainThread && parentPort) {
 						await page.setJavaScriptEnabled(false);
 					}
 
-					// Устанавливаем размер страницы с улучшенным DPR для качества
+					// Устанавливаем размер страницы с улучшенным DPR для качества аватарок
+					const devicePixelRatio =
+						quality >= 95 ? 2.5 : quality >= 90 ? 2 : 1.5; // Улучшенное качество для аватарок
 					await page.setViewport({
 						width: viewportWidth,
 						height: viewportHeight,
-						deviceScaleFactor: quality >= 90 && !optimizeForSpeed ? 2 : 1, // Высокое качество = 2x DPR
+						deviceScaleFactor: devicePixelRatio,
 					});
 
 					console.log(
-						`📐 Viewport: ${viewportWidth}x${viewportHeight}, DPR: ${
-							quality >= 90 && !optimizeForSpeed ? 2 : 1
-						}`,
+						`📐 Viewport: ${viewportWidth}x${viewportHeight}, DPR: ${devicePixelRatio}`,
 					);
 
 					// Загружаем HTML с таймаутом
@@ -169,8 +169,8 @@ if (!isMainThread && parentPort) {
 
 					const screenshot = await page.screenshot({
 						type: 'jpeg',
-						quality: Math.max(80, Math.min(100, quality)), // Повышаем минимальное качество до 80
-						optimizeForSpeed: false, // Отключаем оптимизацию для лучшего качества
+						quality: Math.max(85, Math.min(100, quality)), // Повышаем минимальное качество до 85 для аватарок
+						optimizeForSpeed: false, // Отключаем оптимизацию для лучшего качества аватарок
 						clip: {
 							x: 0,
 							y: 0,
@@ -204,8 +204,8 @@ if (!isMainThread && parentPort) {
  */
 export async function generateImageInWorker(
 	html: string,
-	viewportWidth: number = 800,
-	viewportHeight: number = 1000,
+	viewportWidth: number = 500,
+	viewportHeight: number = 800,
 	quality: number = 85,
 	optimizeForSpeed: boolean = true,
 ): Promise<Buffer> {
