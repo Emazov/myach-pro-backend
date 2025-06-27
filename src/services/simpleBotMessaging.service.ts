@@ -254,14 +254,40 @@ export class SimpleBotMessagingService {
 	 */
 	private validateImageBuffer(buffer: Buffer): boolean {
 		try {
+			logger.info(
+				`🔍 Начало валидации Buffer: buffer=${!!buffer}, тип=${typeof buffer}`,
+				'TELEGRAM_BOT',
+			);
+
 			// Проверяем что Buffer существует и не пустой
-			if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+			if (!buffer) {
+				logger.error('❌ Buffer не определен (null/undefined)', 'TELEGRAM_BOT');
+				return false;
+			}
+
+			if (!Buffer.isBuffer(buffer)) {
 				logger.error(
-					'❌ Buffer пустой, не определен или не является Buffer',
+					`❌ Объект не является Buffer, тип: ${typeof buffer}${
+						buffer
+							? `, конструктор: ${
+									(buffer as any).constructor?.name || 'unknown'
+							  }`
+							: ''
+					}`,
 					'TELEGRAM_BOT',
 				);
 				return false;
 			}
+
+			if (buffer.length === 0) {
+				logger.error('❌ Buffer пустой (длина = 0)', 'TELEGRAM_BOT');
+				return false;
+			}
+
+			logger.info(
+				`✅ Buffer базовая валидация прошла: длина=${buffer.length}`,
+				'TELEGRAM_BOT',
+			);
 
 			// Проверяем минимальный размер (1KB)
 			if (buffer.length < 1024) {
@@ -281,6 +307,11 @@ export class SimpleBotMessagingService {
 				);
 				return false;
 			}
+
+			logger.info(
+				`✅ Buffer размер валиден: ${sizeMB.toFixed(2)}MB`,
+				'TELEGRAM_BOT',
+			);
 
 			// Проверяем JPEG заголовок
 			const jpegHeader = buffer.subarray(0, 3);

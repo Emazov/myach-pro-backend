@@ -126,6 +126,47 @@ export class ShareController {
 					throw new Error('ID пользователя не определен');
 				}
 
+				// Дополнительная диагностика Buffer перед отправкой
+				logger.info(
+					`🔍 Диагностика Buffer перед отправкой: существует=${!!imageBuffer}, размер=${
+						imageBuffer?.length || 0
+					}, тип=${typeof imageBuffer}`,
+					'IMAGE_GENERATION',
+				);
+
+				// Проверяем что Buffer всё ещё валидный
+				if (!imageBuffer || !Buffer.isBuffer(imageBuffer)) {
+					logger.error(
+						`❌ Buffer стал невалидным перед отправкой: существует=${!!imageBuffer}, тип=${typeof imageBuffer}`,
+						'IMAGE_GENERATION',
+					);
+					throw new Error('Buffer изображения поврежден перед отправкой');
+				}
+
+				// Еще раз проверяем JPEG заголовок
+				const headerCheck = imageBuffer.subarray(0, 3);
+				const stillValidJPEG =
+					headerCheck[0] === 0xff &&
+					headerCheck[1] === 0xd8 &&
+					headerCheck[2] === 0xff;
+
+				if (!stillValidJPEG) {
+					logger.error(
+						`❌ JPEG заголовок поврежден перед отправкой: ${headerCheck.toString(
+							'hex',
+						)}`,
+						'IMAGE_GENERATION',
+					);
+					throw new Error('Изображение повреждено перед отправкой');
+				}
+
+				logger.info(
+					`✅ Buffer валиден перед отправкой: ${imageSizeMB.toFixed(
+						2,
+					)}MB, JPEG OK`,
+					'IMAGE_GENERATION',
+				);
+
 				// Используем универсальный сервис отправки (работает в любом процессе)
 				const success = await simpleBotMessagingService.sendImage(
 					userId,
