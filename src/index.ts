@@ -71,6 +71,9 @@ const initApp = () => {
 				'Cache-Control',
 				'X-Response-Time',
 				'X-Cache-Invalidate',
+				'X-Requested-At',
+				'Pragma',
+				'Expires',
 			],
 		}),
 	);

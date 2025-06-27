@@ -117,9 +117,17 @@ export const getAllClubs = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {
+		console.log('🔍 getAllClubs: Начало запроса', {
+			timestamp: new Date().toISOString(),
+			userAgent: req.get('User-Agent'),
+			cacheControl: req.get('Cache-Control'),
+		});
+
 		// Проверяем, является ли пользователь админом
 		const telegramId = getTelegramIdFromRequest(req);
 		const isAdmin = telegramId ? await isUserAdmin(telegramId) : false;
+
+		console.log('👤 Пользователь:', { telegramId, isAdmin });
 
 		// Создаем опции кэширования с учетом роли пользователя
 		const cacheOptions = createCacheOptions(isAdmin, { ttl: 3600 });
@@ -127,14 +135,26 @@ export const getAllClubs = async (
 		// Используем кэширование для получения списка клубов
 		const formattedClubs = await withCache(
 			async () => {
+				console.log('🏗️ Выполняем запрос к БД для получения клубов...');
+
 				const clubs = await prisma.club.findMany({
 					orderBy: { name: 'asc' },
 				});
+
+				console.log(
+					`📊 Найдено клубов в БД: ${clubs.length}`,
+					clubs.map((c) => ({ id: c.id, name: c.name, logo: c.logo })),
+				);
 
 				// Собираем все ключи логотипов для батч-обработки
 				const logoKeys = clubs
 					.map((club) => club.logo)
 					.filter(Boolean) as string[];
+
+				console.log(
+					`🖼️ Ключи логотипов для обработки: ${logoKeys.length}`,
+					logoKeys,
+				);
 
 				// Получаем все URL за один раз
 				const logoUrls = await storageService.getBatchFastUrls(
@@ -142,23 +162,37 @@ export const getAllClubs = async (
 					'logo',
 				);
 
+				console.log('🔗 Полученные URL логотипов:', logoUrls);
+
 				// Формируем ответ с предварительно полученными URL
-				return clubs.map((club) => ({
+				const result = clubs.map((club) => ({
 					id: club.id,
 					name: club.name,
 					logoUrl: club.logo ? logoUrls[club.logo] || '' : '',
 				}));
+
+				console.log('✅ Финальный результат:', result);
+				return result;
 			},
 			CACHE_KEYS.ALL_CLUBS,
 			cacheOptions,
 		);
+
+		console.log('📤 Отправляем ответ клиенту:', {
+			clubsCount: formattedClubs.length,
+			clubs: formattedClubs,
+		});
 
 		res.json({
 			ok: true,
 			clubs: formattedClubs,
 		});
 	} catch (err: any) {
-		console.error('Ошибка при получении клубов:', err);
+		console.error('❌ Ошибка при получении клубов:', {
+			error: err.message,
+			stack: err.stack,
+			timestamp: new Date().toISOString(),
+		});
 		res.status(500).json({ error: 'Ошибка при получении клубов' });
 	}
 };
