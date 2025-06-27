@@ -12,13 +12,19 @@ export const requestTimer = (
 	// Сохраняем время начала запроса
 	const start = Date.now();
 
-	// После завершения запроса
-	res.on('finish', () => {
+	// Переопределяем метод end для установки заголовка до отправки
+	const originalEnd = res.end;
+	res.end = function (chunk?: any, encoding?: any, cb?: any) {
 		// Вычисляем время выполнения
 		const duration = Date.now() - start;
 
 		// Добавляем информацию о времени выполнения в заголовки ответа
-		res.setHeader('X-Response-Time', `${duration}ms`);
+		// Устанавливаем заголовок до вызова оригинального end
+		try {
+			res.setHeader('X-Response-Time', `${duration}ms`);
+		} catch (error) {
+			// Игнорируем ошибки установки заголовков если они уже отправлены
+		}
 
 		// Если запрос выполняется долго, логируем предупреждение
 		if (duration > 500) {
@@ -27,7 +33,10 @@ export const requestTimer = (
 				'PERFORMANCE',
 			);
 		}
-	});
+
+		// Вызываем оригинальный метод end
+		return originalEnd.call(this, chunk, encoding, cb);
+	};
 
 	next();
 };

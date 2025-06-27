@@ -55,7 +55,15 @@ export const config = {
 		url: getEnvVar('WEB_APP_URL'),
 	},
 	cors: {
-		origins: [getEnvVar('WEB_APP_URL')].filter(Boolean),
+		origins: [
+			getEnvVar('WEB_APP_URL'),
+			'https://myach-specialprojects.ru',
+			'https://server.myach-specialprojects.ru',
+			// Добавляем localhost для разработки
+			...(process.env.NODE_ENV === 'development'
+				? ['http://localhost:3000', 'http://localhost:5173']
+				: []),
+		],
 	},
 	r2: {
 		accessKey: getEnvVar('R2_ACCESS_KEY'),
