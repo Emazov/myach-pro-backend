@@ -193,10 +193,6 @@ export class ShareController {
 				return;
 			}
 
-			console.log(
-				'🎨 Генерация изображения для скачивания с улучшенным качеством',
-			);
-
 			const { imageBuffer, club } =
 				await imageGenerationService.generateResultsImage(
 					{
@@ -259,7 +255,6 @@ export class ShareController {
 				.substring(0, 30); // Ограничиваем длину
 
 			const fileName = `tier-list-${safeClubName || 'club'}.jpg`;
-			console.log(`📁 Безопасное имя файла: ${fileName}`);
 
 			res.set({
 				'Content-Type': 'image/jpeg',

@@ -119,14 +119,6 @@ if (!isMainThread && parentPort) {
 							const resourceType = req.resourceType();
 							const url = req.url();
 
-							// Логируем все запросы для диагностики
-							console.log(
-								`🌐 Puppeteer запрос: ${resourceType} -> ${url.substring(
-									0,
-									100,
-								)}...`,
-							);
-
 							if (
 								resourceType === 'stylesheet' ||
 								resourceType === 'font' ||
@@ -134,9 +126,6 @@ if (!isMainThread && parentPort) {
 							) {
 								// Пропускаем внешние ресурсы, используем только инлайн
 								if (url.startsWith('http') && !url.startsWith('data:')) {
-									console.log(
-										`❌ Блокируем ${resourceType}: ${url.substring(0, 50)}...`,
-									);
 									req.abort();
 									return;
 								}
@@ -144,9 +133,6 @@ if (!isMainThread && parentPort) {
 
 							// Разрешаем изображения (включая внешние URL аватарок)
 							if (resourceType === 'image') {
-								console.log(
-									`✅ Разрешаем изображение: ${url.substring(0, 50)}...`,
-								);
 								req.continue();
 								return;
 							}
@@ -167,10 +153,6 @@ if (!isMainThread && parentPort) {
 						deviceScaleFactor: devicePixelRatio,
 					});
 
-					console.log(
-						`📐 Viewport: ${viewportWidth}x${viewportHeight}, DPR: ${devicePixelRatio}`,
-					);
-
 					// Загружаем HTML с таймаутом
 					await page.setContent(html, {
 						waitUntil: optimizeForSpeed ? 'domcontentloaded' : 'networkidle0',
@@ -183,10 +165,6 @@ if (!isMainThread && parentPort) {
 					}
 
 					// ИСПРАВЛЕНИЕ: Убираем fullPage, так как используем clip
-					console.log(
-						`📸 Создание скриншота: ${viewportWidth}x${viewportHeight}, качество: ${quality}%`,
-					);
-
 					const screenshot = await page.screenshot({
 						type: 'jpeg',
 						quality: Math.max(85, Math.min(100, quality)), // Повышаем минимальное качество до 85 для аватарок
@@ -198,8 +176,6 @@ if (!isMainThread && parentPort) {
 							height: viewportHeight,
 						},
 					});
-
-					console.log(`✅ Скриншот создан, размер: ${screenshot.length} байт`);
 
 					parentPort!.postMessage({
 						success: true,
