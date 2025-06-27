@@ -173,6 +173,14 @@ export class TelegramBotService {
 		imageBuffer: Buffer,
 		caption?: string,
 	): Promise<boolean> {
+		// Дополнительная диагностика входящего Buffer
+		logger.info(
+			`🔍 TelegramBotService.sendImage вызван: chatId=${chatId}, buffer существует=${!!imageBuffer}, размер=${
+				imageBuffer?.length || 0
+			}, тип=${typeof imageBuffer}`,
+			'TELEGRAM_BOT',
+		);
+
 		if (!this.bot) {
 			logger.warn(
 				'⚠️ Попытка отправить изображение, но бот не инициализирован',
@@ -185,6 +193,17 @@ export class TelegramBotService {
 		if (!imageBuffer || imageBuffer.length === 0) {
 			logger.error(
 				'❌ Buffer изображения пустой или не определен',
+				'TELEGRAM_BOT',
+			);
+			return false;
+		}
+
+		// Проверяем что это действительно Buffer
+		if (!Buffer.isBuffer(imageBuffer)) {
+			logger.error(
+				`❌ Переданный объект не является Buffer: тип=${typeof imageBuffer}, конструктор=${
+					(imageBuffer as any)?.constructor?.name
+				}`,
 				'TELEGRAM_BOT',
 			);
 			return false;

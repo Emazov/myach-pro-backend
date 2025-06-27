@@ -11,6 +11,7 @@ import { Readable } from 'stream';
 import fs from 'fs';
 import path from 'path';
 import { logger } from '../utils/logger';
+import { testBufferConversion, diagnoseBuffer } from '../utils/bufferTest';
 
 /**
  * Контроллер для обработки функций шаринга
@@ -166,6 +167,19 @@ export class ShareController {
 					)}MB, JPEG OK`,
 					'IMAGE_GENERATION',
 				);
+
+				// Дополнительный тест конвертации перед отправкой
+				const conversionTest = testBufferConversion(
+					imageBuffer,
+					'финальное изображение',
+				);
+				if (!conversionTest) {
+					logger.error(
+						'❌ Тест конвертации провален перед отправкой',
+						'IMAGE_GENERATION',
+					);
+					throw new Error('Изображение повреждено и не может быть отправлено');
+				}
 
 				// Используем универсальный сервис отправки (работает в любом процессе)
 				const success = await simpleBotMessagingService.sendImage(
