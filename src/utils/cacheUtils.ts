@@ -122,6 +122,11 @@ export async function invalidateClubsCache(): Promise<void> {
  */
 export async function invalidateAllDataCache(): Promise<void> {
 	try {
+		// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем импорт функции инвалидации админского кэша
+		const { invalidateAllAdminCache } = await import(
+			'../middleware/checkAdminRole'
+		);
+
 		// Очищаем все основные кеши приложения
 		const patterns = [
 			'cache:clubs:*',
@@ -130,10 +135,17 @@ export async function invalidateAllDataCache(): Promise<void> {
 			'cache:admin:*', // если есть кеш админов
 		];
 
-		const promises = patterns.map((pattern) => invalidateCache(pattern));
+		// Параллельно очищаем обычные кеши и кеш админов
+		const promises = [
+			...patterns.map((pattern) => invalidateCache(pattern)),
+			invalidateAllAdminCache(), // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем кэш админов
+		];
+
 		await Promise.all(promises);
 
-		console.log('Выполнена полная инвалидация кеша данных');
+		console.log(
+			'Выполнена полная инвалидация кеша данных включая админский кэш',
+		);
 	} catch (error) {
 		console.error('Ошибка при полной инвалидации кеша:', error);
 	}

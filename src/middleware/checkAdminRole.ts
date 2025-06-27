@@ -2,10 +2,37 @@ import { Response, NextFunction } from 'express';
 import { TelegramRequest } from '../types/api';
 import { prisma } from '../prisma';
 import { redisService } from '../services/redis.service';
+import { config } from '../config/env';
 
 // Кэш для проверки админов (TTL 5 минут)
 const ADMIN_CACHE_TTL = 300;
 const ADMIN_CACHE_PREFIX = 'admin:check:';
+
+/**
+ * КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Унифицированная проверка админа для согласованности с AdminService
+ * Используется как в middleware, так и в сервисе
+ */
+export const checkIsAdminUser = async (
+	telegramId: string,
+): Promise<boolean> => {
+	try {
+		// Проверяем в таблице AdminUser
+		const adminUser = await prisma.adminUser.findUnique({
+			where: { telegramId },
+		});
+
+		if (adminUser) {
+			return true;
+		}
+
+		// Fallback: проверяем переменную окружения (для совместимости)
+		return telegramId === config.telegram.adminId;
+	} catch (error) {
+		console.error('Ошибка при проверке админа в middleware:', error);
+		// Fallback на переменную окружения при ошибке БД
+		return telegramId === config.telegram.adminId;
+	}
+};
 
 /**
  * Функция для инвалидации кэша конкретного админа
@@ -16,6 +43,7 @@ export const invalidateAdminCache = async (
 	try {
 		const cacheKey = `${ADMIN_CACHE_PREFIX}${telegramId}`;
 		await redisService.delete(cacheKey);
+		console.log(`Кэш админа ${telegramId} успешно инвалидирован`);
 	} catch (error) {
 		console.warn(`Не удалось инвалидировать кэш админа ${telegramId}:`, error);
 	}
@@ -29,6 +57,9 @@ export const invalidateAllAdminCache = async (): Promise<void> => {
 		const keys = await redisService.keys(`${ADMIN_CACHE_PREFIX}*`);
 		if (keys.length > 0) {
 			await redisService.deleteMany(keys);
+			console.log(`Инвалидировано ${keys.length} записей кэша админов`);
+		} else {
+			console.log('Кэш админов уже был пуст');
 		}
 	} catch (error) {
 		console.warn('Не удалось инвалидировать весь кэш админов:', error);
@@ -76,13 +107,8 @@ export const checkAdminRole = async (
 			console.warn('Redis недоступен для проверки админа, используем DB');
 		}
 
-		// Проверяем роль пользователя в БД
-		const user = await prisma.user.findUnique({
-			where: { telegramId },
-			select: { role: true }, // Выбираем только роль для оптимизации
-		});
-
-		const isAdmin = user?.role === 'admin';
+		// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем унифицированную проверку админа
+		const isAdmin = await checkIsAdminUser(telegramId);
 
 		// Кэшируем результат
 		try {

@@ -3,6 +3,7 @@ import { TelegramRequest, AuthResponse } from '../types/api';
 import { config } from '../config/env';
 import { prisma } from '../prisma';
 import { AdminService } from '../services/admin.service';
+import { invalidateAdminCache } from '../middleware/checkAdminRole';
 
 /**
  * Контроллер для авторизации пользователя через Telegram
@@ -31,6 +32,7 @@ export const authUser = async (
 		});
 
 		let user;
+		let roleChanged = false;
 
 		if (!existingUser) {
 			// Создаем нового пользователя
@@ -47,6 +49,9 @@ export const authUser = async (
 				existingUser.username !== (telegramUser.username || null) ||
 				existingUser.role !== role;
 
+			// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Отслеживаем изменение роли
+			roleChanged = existingUser.role !== role;
+
 			if (needsUpdate) {
 				user = await prisma.user.update({
 					where: { telegramId },
@@ -58,6 +63,14 @@ export const authUser = async (
 			} else {
 				user = existingUser;
 			}
+		}
+
+		// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Инвалидируем кэш админа при изменении роли
+		if (roleChanged) {
+			await invalidateAdminCache(telegramId);
+			console.log(
+				`Роль пользователя ${telegramId} изменена с ${existingUser?.role} на ${role}, кэш инвалидирован`,
+			);
 		}
 
 		res.json({

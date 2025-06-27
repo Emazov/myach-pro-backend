@@ -7,6 +7,7 @@ import {
 	invalidateAllDataCache,
 } from '../utils/cacheUtils';
 import { redisService } from '../services/redis.service';
+import { invalidateAllAdminCache } from '../middleware/checkAdminRole';
 
 /**
  * Получить список всех админов
@@ -55,7 +56,8 @@ export const addAdmin = async (
 		);
 
 		if (result.success) {
-			// Инвалидируем кеш при изменении админов
+			// ИСПРАВЛЕНИЕ: AdminService уже инвалидирует конкретный кэш админа,
+			// здесь мы инвалидируем общие кэши данных
 			await invalidateAllDataCache();
 			res.json({ ok: true, message: result.message });
 		} else {
@@ -93,7 +95,8 @@ export const removeAdmin = async (
 		const result = await AdminService.removeAdmin(telegramId, removedBy);
 
 		if (result.success) {
-			// Инвалидируем кеш при изменении админов
+			// ИСПРАВЛЕНИЕ: AdminService уже инвалидирует конкретный кэш админа,
+			// здесь мы инвалидируем общие кэши данных
 			await invalidateAllDataCache();
 			res.json({ ok: true, message: result.message });
 		} else {
@@ -167,7 +170,8 @@ export const addAdminByUsername = async (
 		const result = await AdminService.addAdminByUsername(username, addedBy);
 
 		if (result.success) {
-			// Инвалидируем кеш при изменении админов
+			// ИСПРАВЛЕНИЕ: AdminService уже инвалидирует конкретный кэш админа,
+			// здесь мы инвалидируем общие кэши данных
 			await invalidateAllDataCache();
 			res.json({ ok: true, message: result.message });
 		} else {
@@ -230,11 +234,15 @@ export const clearAllCache = async (
 	next: NextFunction,
 ): Promise<void> => {
 	try {
-		await redisService.flushAll();
+		// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем все типы кэша включая админский
+		await Promise.all([
+			redisService.flushAll(),
+			invalidateAllAdminCache(), // Дополнительно очищаем админский кэш
+		]);
 
 		res.json({
 			ok: true,
-			message: 'Весь кеш успешно очищен',
+			message: 'Весь кеш включая админский успешно очищен',
 		});
 	} catch (error) {
 		console.error('Ошибка при полной очистке кеша:', error);

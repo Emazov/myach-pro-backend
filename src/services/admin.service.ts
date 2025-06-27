@@ -1,28 +1,18 @@
 import { prisma } from '../prisma';
 import { config } from '../config/env';
+import {
+	invalidateAdminCache,
+	invalidateAllAdminCache,
+	checkIsAdminUser,
+} from '../middleware/checkAdminRole';
 
 export class AdminService {
 	/**
 	 * Проверяет, является ли пользователь админом
+	 * КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Используем унифицированную функцию из middleware
 	 */
 	static async isAdmin(telegramId: string): Promise<boolean> {
-		try {
-			// Проверяем в таблице AdminUser
-			const adminUser = await prisma.adminUser.findUnique({
-				where: { telegramId },
-			});
-
-			if (adminUser) {
-				return true;
-			}
-
-			// Fallback: проверяем переменную окружения (для совместимости)
-			return telegramId === config.telegram.adminId;
-		} catch (error) {
-			console.error('Ошибка при проверке админа:', error);
-			// Fallback на переменную окружения при ошибке БД
-			return telegramId === config.telegram.adminId;
-		}
+		return await checkIsAdminUser(telegramId);
 	}
 
 	/**
@@ -49,20 +39,26 @@ export class AdminService {
 				return { success: false, message: 'Пользователь уже является админом' };
 			}
 
-			// Добавляем нового админа
-			await prisma.adminUser.create({
-				data: {
-					telegramId,
-					username,
-					addedBy,
-				},
+			// Выполняем операции в транзакции для обеспечения целостности
+			await prisma.$transaction(async (tx) => {
+				// Добавляем нового админа
+				await tx.adminUser.create({
+					data: {
+						telegramId,
+						username,
+						addedBy,
+					},
+				});
+
+				// Обновляем роль пользователя в основной таблице
+				await tx.user.updateMany({
+					where: { telegramId },
+					data: { role: 'admin' },
+				});
 			});
 
-			// Обновляем роль пользователя в основной таблице
-			await prisma.user.updateMany({
-				where: { telegramId },
-				data: { role: 'admin' },
-			});
+			// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Инвалидируем кэш админа сразу после добавления
+			await invalidateAdminCache(telegramId);
 
 			return { success: true, message: 'Админ успешно добавлен' };
 		} catch (error) {
@@ -95,16 +91,22 @@ export class AdminService {
 				return { success: false, message: 'Нельзя удалить главного админа' };
 			}
 
-			// Удаляем из таблицы админов
-			const deletedAdmin = await prisma.adminUser.delete({
-				where: { telegramId },
+			// Выполняем операции в транзакции для обеспечения целостности
+			await prisma.$transaction(async (tx) => {
+				// Удаляем из таблицы админов
+				await tx.adminUser.delete({
+					where: { telegramId },
+				});
+
+				// Обновляем роль пользователя в основной таблице
+				await tx.user.updateMany({
+					where: { telegramId },
+					data: { role: 'user' },
+				});
 			});
 
-			// Обновляем роль пользователя в основной таблице
-			await prisma.user.updateMany({
-				where: { telegramId },
-				data: { role: 'user' },
-			});
+			// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Инвалидируем кэш админа сразу после удаления
+			await invalidateAdminCache(telegramId);
 
 			return { success: true, message: 'Админ успешно удален' };
 		} catch (error) {
@@ -247,47 +249,53 @@ export class AdminService {
 					} -> ${currentMainAdminId}`,
 				);
 
-				// Удаляем всех админов кроме нового главного
-				await prisma.adminUser.deleteMany({
-					where: {
-						telegramId: {
-							not: currentMainAdminId,
+				// Выполняем операции в транзакции для обеспечения целостности
+				await prisma.$transaction(async (tx) => {
+					// Удаляем всех админов кроме нового главного
+					await tx.adminUser.deleteMany({
+						where: {
+							telegramId: {
+								not: currentMainAdminId,
+							},
 						},
-					},
-				});
+					});
 
-				// Сбрасываем роли всех пользователей кроме главного админа
-				await prisma.user.updateMany({
-					where: {
-						telegramId: {
-							not: currentMainAdminId,
+					// Сбрасываем роли всех пользователей кроме главного админа
+					await tx.user.updateMany({
+						where: {
+							telegramId: {
+								not: currentMainAdminId,
+							},
+							role: 'admin',
 						},
-						role: 'admin',
-					},
-					data: {
-						role: 'user',
-					},
+						data: {
+							role: 'user',
+						},
+					});
+
+					// Устанавливаем роль админа для нового главного админа
+					await tx.user.updateMany({
+						where: {
+							telegramId: currentMainAdminId,
+						},
+						data: {
+							role: 'admin',
+						},
+					});
+
+					// Сохраняем новый ID главного админа
+					await tx.systemSettings.upsert({
+						where: { key: LAST_MAIN_ADMIN_KEY },
+						update: { value: currentMainAdminId },
+						create: {
+							key: LAST_MAIN_ADMIN_KEY,
+							value: currentMainAdminId,
+						},
+					});
 				});
 
-				// Устанавливаем роль админа для нового главного админа
-				await prisma.user.updateMany({
-					where: {
-						telegramId: currentMainAdminId,
-					},
-					data: {
-						role: 'admin',
-					},
-				});
-
-				// Сохраняем новый ID главного админа
-				await prisma.systemSettings.upsert({
-					where: { key: LAST_MAIN_ADMIN_KEY },
-					update: { value: currentMainAdminId },
-					create: {
-						key: LAST_MAIN_ADMIN_KEY,
-						value: currentMainAdminId,
-					},
-				});
+				// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Полностью очищаем кэш админов при сбросе
+				await invalidateAllAdminCache();
 
 				console.log(
 					`Список админов сброшен. Оставлен только главный админ: ${currentMainAdminId}`,
