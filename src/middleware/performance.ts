@@ -42,7 +42,8 @@ export const requestTimer = (
 };
 
 /**
- * Middleware для кэширования HTTP-ответов на стороне клиента
+ * КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Улучшенное кэширование HTTP-ответов
+ * Исправляет проблему с застрявшими данными на мобильных устройствах
  */
 export const httpCache = (req: Request, res: Response, next: NextFunction) => {
 	// Для GET и HEAD запросов устанавливаем заголовки кэширования
@@ -51,13 +52,17 @@ export const httpCache = (req: Request, res: Response, next: NextFunction) => {
 		if (req.path.includes('/static/')) {
 			res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 день
 		}
-		// Для API-запросов устанавливаем короткий TTL
+		// КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Для API клубов и игроков используем условное кэширование
 		else if (req.path.startsWith('/api/')) {
-			// Для запросов, которые редко меняются
 			if (req.path.includes('/clubs') || req.path.includes('/players')) {
-				res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 час
+				// Условное кэширование с короткими интервалами для мобильных устройств
+				res.setHeader('Cache-Control', 'private, max-age=60, must-revalidate'); // 1 минута
+				// Генерируем ETag на основе времени для принудительной проверки
+				const etag = `W/"clubs-${Math.floor(Date.now() / 60000)}"`;
+				res.setHeader('ETag', etag);
+				res.setHeader('Vary', 'Authorization'); // Кэшируем по пользователю
 			} else {
-				// Для остальных API запросов используем условное кэширование
+				// Для остальных API запросов используем минимальное кэширование
 				res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
 				res.setHeader('ETag', `W/"${Date.now().toString(36)}"`);
 			}
@@ -97,6 +102,30 @@ export const connectionOptimizer = (
 	// Устанавливаем заголовок Keep-Alive для поддержания соединения
 	res.setHeader('Connection', 'keep-alive');
 	res.setHeader('Keep-Alive', 'timeout=5, max=1000');
+
+	next();
+};
+
+/**
+ * НОВОЕ: Middleware для принудительной инвалидации кэша после изменений
+ */
+export const invalidateBrowserCache = (
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) => {
+	// Только для POST, PUT, DELETE запросов к API клубов/игроков
+	if (
+		['POST', 'PUT', 'DELETE'].includes(req.method) &&
+		req.path.startsWith('/api/') &&
+		(req.path.includes('/clubs') || req.path.includes('/players'))
+	) {
+		// Добавляем заголовки для принудительной инвалидации кэша
+		res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+		res.setHeader('Pragma', 'no-cache');
+		res.setHeader('Expires', '0');
+		res.setHeader('X-Cache-Invalidate', 'clubs,players');
+	}
 
 	next();
 };

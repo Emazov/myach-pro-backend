@@ -18,6 +18,7 @@ import {
 	httpCache,
 	connectionOptimizer,
 	simpleRateLimit,
+	invalidateBrowserCache,
 } from './middleware/performance';
 
 import authRoutes from './routes/auth';
@@ -47,6 +48,7 @@ const initApp = () => {
 	app.use(requestTimer);
 	app.use(connectionOptimizer);
 	app.use(httpCache);
+	app.use(invalidateBrowserCache);
 	app.use(simpleCompression);
 	app.use(simpleRateLimit(500, 60000)); // 500 запросов в минуту
 
@@ -68,6 +70,7 @@ const initApp = () => {
 				'Authorization',
 				'Cache-Control',
 				'X-Response-Time',
+				'X-Cache-Invalidate',
 			],
 		}),
 	);
