@@ -138,12 +138,18 @@ if (!isMainThread && parentPort) {
 						await page.setJavaScriptEnabled(false);
 					}
 
-					// Устанавливаем размер страницы
+					// Устанавливаем размер страницы с улучшенным DPR для качества
 					await page.setViewport({
 						width: viewportWidth,
 						height: viewportHeight,
-						deviceScaleFactor: quality > 90 ? 2 : 1, // Высокое качество = 2x DPR
+						deviceScaleFactor: quality >= 90 && !optimizeForSpeed ? 2 : 1, // Высокое качество = 2x DPR
 					});
+
+					console.log(
+						`📐 Viewport: ${viewportWidth}x${viewportHeight}, DPR: ${
+							quality >= 90 && !optimizeForSpeed ? 2 : 1
+						}`,
+					);
 
 					// Загружаем HTML с таймаутом
 					await page.setContent(html, {
@@ -156,12 +162,15 @@ if (!isMainThread && parentPort) {
 						await page.evaluateHandle('document.fonts.ready');
 					}
 
-					// Генерируем скриншот с оптимизированными настройками
+					// ИСПРАВЛЕНИЕ: Убираем fullPage, так как используем clip
+					console.log(
+						`📸 Создание скриншота: ${viewportWidth}x${viewportHeight}, качество: ${quality}%`,
+					);
+
 					const screenshot = await page.screenshot({
 						type: 'jpeg',
-						fullPage: true,
-						quality: Math.max(60, Math.min(100, quality)), // Ограничиваем качество от 60 до 100
-						optimizeForSpeed,
+						quality: Math.max(80, Math.min(100, quality)), // Повышаем минимальное качество до 80
+						optimizeForSpeed: false, // Отключаем оптимизацию для лучшего качества
 						clip: {
 							x: 0,
 							y: 0,
@@ -169,6 +178,8 @@ if (!isMainThread && parentPort) {
 							height: viewportHeight,
 						},
 					});
+
+					console.log(`✅ Скриншот создан, размер: ${screenshot.length} байт`);
 
 					parentPort!.postMessage({
 						success: true,

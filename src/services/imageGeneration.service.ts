@@ -613,6 +613,10 @@ export class ImageGenerationService {
 			const html = await this.generateHTML(data, finalOptions);
 
 			// Генерируем изображение в отдельном Worker потоке
+			console.log(
+				`🔧 Параметры генерации: качество=${finalOptions.quality}%, скорость=${finalOptions.optimizeForSpeed}`,
+			);
+
 			const imageBuffer = await generateImageInWorker(
 				html,
 				finalOptions.width,
