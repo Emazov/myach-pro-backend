@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { TelegramRequest } from '../types/api';
 import { StorageService } from '../services/storage.service';
+import { logger } from '../utils/logger';
 
 const storageService = new StorageService();
 
@@ -151,6 +152,66 @@ export const getFastImageUrls = async (
 		console.error('Ошибка получения быстрых URL:', error);
 		res.status(500).json({
 			error: 'Ошибка получения ссылок на файлы',
+		});
+	}
+};
+
+export const getBatchUrls = async (
+	req: TelegramRequest,
+	res: Response,
+): Promise<void> => {
+	try {
+		const { fileKeys, width, height, format = 'webp', quality = 80 } = req.body;
+
+		// Валидация входных данных
+		if (!Array.isArray(fileKeys) || fileKeys.length === 0) {
+			res.status(400).json({
+				ok: false,
+				error: 'fileKeys должен быть непустым массивом',
+			});
+			return;
+		}
+
+		// Ограничиваем количество файлов в одном запросе
+		if (fileKeys.length > 50) {
+			res.status(400).json({
+				ok: false,
+				error: 'Максимальное количество файлов в одном запросе: 50',
+			});
+			return;
+		}
+
+		const storageService = new StorageService();
+
+		// Измеряем время выполнения
+		const startTime = Date.now();
+
+		// Получаем URLs батчем для оптимизации
+		const urls = await storageService.getBatchUrls(fileKeys, {
+			width,
+			height,
+			format,
+			quality,
+		});
+
+		// Логируем производительность
+		const duration = Date.now() - startTime;
+		if (duration > 200) {
+			logger.warn(
+				`Медленный batch-urls запрос: ${fileKeys.length} файлов за ${duration}ms`,
+				'PERFORMANCE',
+			);
+		}
+
+		res.json({
+			ok: true,
+			urls,
+		});
+	} catch (error) {
+		logger.error('Ошибка при получении batch URLs', 'BATCH_URLS', error);
+		res.status(500).json({
+			ok: false,
+			error: 'Внутренняя ошибка сервера',
 		});
 	}
 };

@@ -23,7 +23,7 @@ export class ShareController {
 	/**
 	 * Генерирует изображение результатов и отправляет в Telegram
 	 */
-	public shareResults = async (req: Request, res: Response): Promise<void> => {
+	public shareResults = async (req: Request, res: Response) => {
 		try {
 			const { initData, shareData } = req.body;
 
@@ -164,7 +164,7 @@ export class ShareController {
 	/**
 	 * Предварительный просмотр изображения (для тестирования)
 	 */
-	public previewImage = async (req: Request, res: Response): Promise<void> => {
+	public previewImage = async (req: Request, res: Response) => {
 		try {
 			const shareData = req.body;
 

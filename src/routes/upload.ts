@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
 	generateUploadUrl,
 	getBatchImageUrls,
+	getBatchUrls,
 	getFastImageUrls,
 	getCacheStats,
 } from '../controllers/upload.controller';
@@ -14,7 +15,7 @@ const router = Router();
 router.post('/url', initDataAuth, checkAdminRole, generateUploadUrl);
 
 // Получение множественных оптимизированных URL (для всех авторизованных пользователей)
-router.post('/batch-urls', initDataAuth, getBatchImageUrls);
+router.post('/batch-urls', initDataAuth, getBatchUrls);
 
 // Быстрое получение оптимизированных URL для изображений (для всех авторизованных пользователей)
 router.post('/fast-urls', initDataAuth, getFastImageUrls);

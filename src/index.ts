@@ -10,6 +10,15 @@ import { AnalyticsService } from './services/analytics.service';
 import { imageGenerationService } from './services/imageGeneration.service';
 import { logger } from './utils/logger';
 
+// Импортируем middleware производительности и сжатия
+import { simpleCompression } from './middleware/compression';
+import {
+	requestTimer,
+	httpCache,
+	connectionOptimizer,
+	simpleRateLimit,
+} from './middleware/performance';
+
 import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
 import playersRoutes from './routes/players';
@@ -32,6 +41,13 @@ const initApp = () => {
 	if (!fs.existsSync(tmpDir)) {
 		fs.mkdirSync(tmpDir, { recursive: true });
 	}
+
+	// Подключаем middleware производительности
+	app.use(requestTimer);
+	app.use(connectionOptimizer);
+	app.use(httpCache);
+	app.use(simpleCompression);
+	app.use(simpleRateLimit(500, 60000)); // 500 запросов в минуту
 
 	// Настраиваем middleware
 	app.use(

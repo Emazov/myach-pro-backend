@@ -8,12 +8,12 @@ const router = Router();
  * POST /api/share/results
  * Генерирует изображение результатов и отправляет в Telegram
  */
-router.post('/results', (req, res) => shareController.shareResults(req, res));
+router.post('/results', shareController.shareResults);
 
 /**
  * POST /api/share/preview
  * Предварительный просмотр изображения (для тестирования)
  */
-router.post('/preview', (req, res) => shareController.previewImage(req, res));
+router.post('/preview', shareController.previewImage);
 
 export default router;
