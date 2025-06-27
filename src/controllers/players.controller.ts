@@ -2,7 +2,7 @@ import { Response, NextFunction } from 'express';
 import { TelegramRequest, PlayerWithSignedUrl } from '../types/api';
 import { prisma } from '../prisma';
 import { StorageService } from '../services/storage.service';
-import { invalidateClubsCache } from '../utils/cacheUtils';
+import { invalidateCache } from '../utils/cacheUtils';
 
 // Создаем экземпляр сервиса для хранилища
 const storageService = new StorageService();
@@ -22,6 +22,8 @@ export const createPlayer = async (
 	res: Response,
 	next: NextFunction,
 ): Promise<void> => {
+	const startTime = Date.now();
+
 	try {
 		const { name, clubId } = req.body;
 		const file = req.file;
@@ -31,54 +33,93 @@ export const createPlayer = async (
 			return;
 		}
 
-		// Проверяем существование клуба
-		const club = await prisma.club.findUnique({
-			where: { id: clubId },
-		});
+		// ОПТИМИЗАЦИЯ 1: Объединяем проверки в один запрос
+		const [club, existingPlayer] = await Promise.all([
+			prisma.club.findUnique({
+				where: { id: clubId },
+				select: { id: true, name: true }, // Выбираем только нужные поля
+			}),
+			prisma.players.findFirst({
+				where: { name, clubId },
+				select: { id: true }, // Нужен только ID для проверки существования
+			}),
+		]);
 
+		// Проверяем результаты
 		if (!club) {
 			res.status(400).json({ error: 'Указанный клуб не существует' });
 			return;
 		}
 
-		// Проверяем, существует ли игрок с таким именем
-		const isPlayerExists = await prisma.players.findFirst({
-			where: {
-				name,
-				clubId,
-			},
-		});
-
-		if (isPlayerExists) {
-			res
-				.status(400)
-				.json({ error: 'Игрок с таким именем уже существует в данном клубе' });
+		if (existingPlayer) {
+			res.status(400).json({
+				error: 'Игрок с таким именем уже существует в данном клубе',
+			});
 			return;
 		}
 
+		// ОПТИМИЗАЦИЯ 2: Параллельная загрузка файла и создание игрока
 		let avatarKey = '';
+		let uploadPromise: Promise<string> | null = null;
 
-		// Если был загружен файл, сохраняем его в R2
+		// Запускаем загрузку файла параллельно
 		if (file) {
-			avatarKey = await storageService.uploadFile(file, 'players');
+			uploadPromise = storageService.uploadFile(file, 'players');
 		}
 
-		// Создаем игрока
+		// Создаем игрока с пустым аватаром сначала
 		const player = await prisma.players.create({
 			data: {
 				name,
-				avatar: avatarKey,
+				avatar: '', // Временно пустой
 				clubId,
+			},
+			select: {
+				id: true,
+				name: true,
 			},
 		});
 
-		// Генерируем подписанный URL для аватара
-		const avatarUrl = player.avatar
-			? await storageService.getFastImageUrl(player.avatar, 'avatar')
+		// ОПТИМИЗАЦИЯ 3: Параллельное выполнение загрузки и инвалидации
+		const operations: Promise<any>[] = [];
+
+		// Если файл загружается, ждем завершения и обновляем запись
+		if (uploadPromise) {
+			operations.push(
+				uploadPromise.then(async (key) => {
+					avatarKey = key;
+					// Обновляем аватар игрока
+					await prisma.players.update({
+						where: { id: player.id },
+						data: { avatar: key },
+					});
+					return key;
+				}),
+			);
+		}
+
+		// ОПТИМИЗАЦИЯ 4: Более быстрая инвалидация кэша
+		operations.push(
+			// Инвалидируем только конкретные ключи вместо поиска по шаблону
+			Promise.all([
+				invalidateCache(`cache:clubs:id:${clubId}`),
+				invalidateCache('cache:clubs:all'),
+			]),
+		);
+
+		// Ждем завершения всех операций
+		await Promise.all(operations);
+
+		// Генерируем URL для аватара если он есть
+		const avatarUrl = avatarKey
+			? await storageService.getFastImageUrl(avatarKey, 'avatar')
 			: '';
 
-		// Инвалидируем кэш клубов, так как добавился новый игрок
-		await invalidateClubsCache();
+		// Логируем производительность
+		const duration = Date.now() - startTime;
+		if (duration > 1000) {
+			console.warn(`Медленное создание игрока: ${duration}ms`);
+		}
 
 		res.status(201).json({
 			ok: true,
@@ -89,7 +130,8 @@ export const createPlayer = async (
 			},
 		});
 	} catch (err: any) {
-		console.error('Ошибка при создании игрока:', err);
+		const duration = Date.now() - startTime;
+		console.error(`Ошибка при создании игрока (${duration}ms):`, err);
 		res.status(500).json({ error: 'Ошибка при создании игрока' });
 	}
 };
@@ -286,7 +328,10 @@ export const updatePlayer = async (
 			: '';
 
 		// Инвалидируем кэш клубов, так как изменился игрок
-		await invalidateClubsCache();
+		await Promise.all([
+			invalidateCache(`cache:clubs:id:${updatedPlayer.clubId}`),
+			invalidateCache('cache:clubs:all'),
+		]);
 
 		res.json({
 			ok: true,
@@ -352,7 +397,10 @@ export const deletePlayer = async (
 		});
 
 		// Инвалидируем кэш клубов, так как удалился игрок
-		await invalidateClubsCache();
+		await Promise.all([
+			invalidateCache(`cache:clubs:id:${player.clubId}`),
+			invalidateCache('cache:clubs:all'),
+		]);
 
 		res.json({
 			ok: true,

@@ -28,7 +28,6 @@ const fileFilter = (
 		'image/png',
 		'image/webp',
 		'image/gif',
-		'image/svg+xml',
 	];
 
 	if (allowedMimeTypes.includes(file.mimetype)) {
@@ -36,52 +35,71 @@ const fileFilter = (
 	} else {
 		cb(
 			new Error(
-				'Неподдерживаемый формат файла. Разрешены только изображения (JPEG, PNG, WebP, GIF, SVG)',
+				'Неподдерживаемый формат файла. Разрешены только изображения (JPEG, PNG, WebP, GIF)',
 			),
 		);
 	}
 };
 
-// Лимиты для загрузки файлов
+// ОПТИМИЗАЦИЯ: Более строгие лимиты для лучшей производительности
 const limits = {
-	fileSize: 5 * 1024 * 1024, // 5MB
+	fileSize: 5 * 1024 * 1024, // 5MB максимум
+	files: 1, // Только один файл за раз
+	fields: 10, // Максимум полей в форме
+	fieldSize: 1024 * 1024, // 1MB на поле
 };
 
-// Middleware для загрузки изображения клуба
+// Настройка multer для загрузки клубов
 export const uploadClubLogo = multer({
 	storage,
 	fileFilter,
 	limits,
 }).single('logo');
 
-// Middleware для загрузки аватара игрока
+// Настройка multer для загрузки аватаров игроков
 export const uploadPlayerAvatar = multer({
 	storage,
 	fileFilter,
 	limits,
 }).single('avatar');
 
-// Middleware для обработки ошибок загрузки
+// ОПТИМИЗАЦИЯ: Более быстрая обработка ошибок
 export const handleUploadError = (
-	err: any,
-	req: Request,
+	error: any,
+	req: any,
 	res: any,
 	next: any,
 ) => {
-	if (err instanceof multer.MulterError) {
-		if (err.code === 'LIMIT_FILE_SIZE') {
-			return res
-				.status(400)
-				.json({ error: 'Размер файла не должен превышать 5MB' });
+	if (error instanceof multer.MulterError) {
+		switch (error.code) {
+			case 'LIMIT_FILE_SIZE':
+				return res.status(400).json({
+					error: 'Файл слишком большой. Максимальный размер: 5MB',
+				});
+			case 'LIMIT_FILE_COUNT':
+				return res.status(400).json({
+					error: 'Можно загружать только один файл за раз',
+				});
+			case 'LIMIT_UNEXPECTED_FILE':
+				return res.status(400).json({
+					error: 'Неожиданный файл в запросе',
+				});
+			default:
+				return res.status(400).json({
+					error: 'Ошибка загрузки файла',
+				});
 		}
-		return res
-			.status(400)
-			.json({ error: `Ошибка загрузки файла: ${err.message}` });
 	}
 
-	if (err) {
-		return res.status(400).json({ error: err.message });
+	if (error.message.includes('Неподдерживаемый формат файла')) {
+		return res.status(400).json({
+			error: error.message,
+		});
 	}
 
-	next();
+	// Логируем неизвестные ошибки
+	console.error('Неизвестная ошибка загрузки:', error);
+	return res.status(500).json({
+		error: 'Внутренняя ошибка сервера при загрузке файла',
+	});
 };
