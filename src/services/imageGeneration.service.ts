@@ -453,8 +453,8 @@ export class ImageGenerationService {
 
 		.content {
 			background: rgba(255, 255, 255, 0.98);
-			border-radius: 25px;
-			padding: 20px;
+			border-radius: 23px;
+			padding: 10px;
 			width: 100%;
 			max-height: calc(100% - 200px);
 			overflow: hidden;
@@ -491,10 +491,10 @@ export class ImageGenerationService {
 		}
 
 		.category-section {
-			border-radius: 15px;
+			border-radius: 13px;
 			overflow: hidden;
 			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-			padding: 8px 8px 8px 15px;
+			padding: 5px 5px 5px 10px;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
