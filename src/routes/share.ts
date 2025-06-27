@@ -1,25 +1,51 @@
 import express from 'express';
 import { validateInitData } from '../middleware/validateInitData';
-import { shareController } from '../controllers/share.controller';
-
-const router = express.Router();
-
-/**
- * POST /api/share/results
- * Генерирует изображение результатов и отправляет в Telegram
- */
-router.post('/results', validateInitData, shareController.shareResults);
+import { ShareController } from '../controllers/share.controller';
+import { createRateLimit } from '../middleware/advancedRateLimit';
+import { TelegramBotService } from '../bot/telegramBot';
 
 /**
- * POST /api/share/preview
- * Предварительный просмотр изображения (сжатое для быстрой загрузки)
+ * Создает роуты для шеринга с переданным экземпляром бота
  */
-router.post('/preview', validateInitData, shareController.previewImage);
+export const createShareRoutes = (botService: TelegramBotService) => {
+	const router = express.Router();
+	const shareController = new ShareController(botService);
 
-/**
- * POST /api/share/download
- * Получение изображения в высоком качестве для шэринга/скачивания
- */
-router.post('/download', validateInitData, shareController.downloadImage);
+	// Создаем лимиты для генерации изображений
+	const imageRateLimit = createRateLimit.imageGeneration().middleware();
 
-export { router as shareRoutes };
+	/**
+	 * POST /api/share/results
+	 * Генерирует изображение результатов и отправляет в Telegram
+	 */
+	router.post(
+		'/results',
+		validateInitData,
+		imageRateLimit,
+		shareController.shareResults,
+	);
+
+	/**
+	 * POST /api/share/preview
+	 * Предварительный просмотр изображения (сжатое для быстрой загрузки)
+	 */
+	router.post(
+		'/preview',
+		validateInitData,
+		imageRateLimit,
+		shareController.previewImage,
+	);
+
+	/**
+	 * POST /api/share/download
+	 * Получение изображения в высоком качестве для шэринга/скачивания
+	 */
+	router.post(
+		'/download',
+		validateInitData,
+		imageRateLimit,
+		shareController.downloadImage,
+	);
+
+	return router;
+};

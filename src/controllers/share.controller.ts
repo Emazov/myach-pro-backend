@@ -3,7 +3,7 @@ import {
 	imageGenerationService,
 	ShareImageData,
 } from '../services/imageGeneration.service';
-import TelegramBot from 'node-telegram-bot-api';
+import { TelegramBotService } from '../bot/telegramBot';
 import { initDataUtils } from '../utils/initDataUtils';
 import { config } from '../config/env';
 import { Readable } from 'stream';
@@ -13,12 +13,13 @@ import { logger } from '../utils/logger';
 
 /**
  * Контроллер для обработки функций шаринга
+ * ИСПРАВЛЕНИЕ: Использует глобальный экземпляр бота вместо создания нового
  */
 export class ShareController {
-	private bot: TelegramBot;
+	private botService: TelegramBotService;
 
-	constructor() {
-		this.bot = new TelegramBot(config.telegram.botToken);
+	constructor(botService: TelegramBotService) {
+		this.botService = botService;
 	}
 
 	/**
@@ -76,7 +77,7 @@ export class ShareController {
 			console.log('🎨 Генерация изображения для Android с высоким качеством');
 			const { imageBuffer, club } =
 				await imageGenerationService.generateResultsImage(imageData, {
-					quality: 98, // Высокое качество как для iOS
+					quality: 90, // Высокое качество как для iOS
 					width: 550, // Оптимальная ширина для аватарок
 					height: 800, // Оптимальная высота
 					optimizeForSpeed: false, // ВАЖНО: отключаем оптимизацию для загрузки аватарок
@@ -95,14 +96,14 @@ export class ShareController {
 			}
 
 			// Отправляем изображение пользователю в Telegram
-			const caption = `🏆 ТИР-ЛИСТ "${club.name.toUpperCase()}"\n\n⚽ Создано в @${
+			const caption = `🏆 ТИР-ЛИСТ "${club.name.toUpperCase()}"\n\n⚽ Создай свой и делись с друзьями в\n@${
 				config.telegram.botUsername
 			}`;
 
 			try {
-				// КРИТИЧЕСКАЯ ПРОВЕРКА: Убеждаемся что бот инициализирован
-				if (!this.bot) {
-					throw new Error('Telegram бот не инициализирован');
+				// КРИТИЧЕСКАЯ ПРОВЕРКА: Убеждаемся что бот доступен
+				if (!this.botService.isBotAvailable()) {
+					throw new Error('Telegram бот не доступен в этом процессе');
 				}
 
 				// Проверяем что userId определен
@@ -114,96 +115,30 @@ export class ShareController {
 					`📤 Отправка изображения в Telegram для пользователя: ${userId}`,
 				);
 				console.log(`📝 Размер изображения: ${imageBuffer.length} байт`);
-				console.log(`🤖 Бот инициализирован: ${!!this.bot}`);
+				console.log(`🤖 Бот доступен: ${this.botService.isBotAvailable()}`);
 
-				// Пытаемся отправить через Stream (рекомендуемый способ)
-				const imageStream = new Readable({
-					read() {},
-				});
-				imageStream.push(imageBuffer);
-				imageStream.push(null);
-
-				const result = await this.bot.sendPhoto(userId, imageStream, {
+				// Используем метод sendImage из botService
+				const success = await this.botService.sendImage(
+					userId,
+					imageBuffer,
 					caption,
-					reply_markup: {
-						inline_keyboard: [
-							[
-								{
-									text: 'Открыть Тир Лист',
-									web_app: { url: config.webApp.url },
-								},
-							],
-						],
-					},
-				});
-
-				console.log(
-					`✅ Изображение успешно отправлено через Stream, message_id: ${result.message_id}`,
 				);
-			} catch (streamError) {
-				console.error('❌ Ошибка отправки через Stream:', {
+
+				if (!success) {
+					throw new Error('Не удалось отправить изображение через botService');
+				}
+
+				console.log('✅ Изображение успешно отправлено через botService');
+			} catch (sendError) {
+				console.error('❌ Ошибка отправки через botService:', {
 					error:
-						streamError instanceof Error
-							? streamError.message
-							: String(streamError),
+						sendError instanceof Error ? sendError.message : String(sendError),
 					userId,
 					imageSize: imageBuffer.length,
 				});
 
-				console.warn('🔄 Пробуем отправить через временный файл...');
-
-				// Fallback: создаем временный файл
-				const tempFileName = `tier-list-${userId}-${Date.now()}.jpg`;
-				const tempFilePath = path.join(
-					process.cwd(),
-					'tmp',
-					'uploads',
-					tempFileName,
-				);
-
-				// Записываем изображение во временный файл
-				await fs.promises.writeFile(tempFilePath, imageBuffer);
-				console.log(`💾 Временный файл создан: ${tempFilePath}`);
-
-				try {
-					// Проверяем что userId определен перед отправкой через файл
-					if (!userId) {
-						throw new Error('ID пользователя не определен для отправки файла');
-					}
-
-					// Отправляем через файл
-					const fileResult = await this.bot.sendPhoto(userId, tempFilePath, {
-						caption,
-						reply_markup: {
-							inline_keyboard: [
-								[
-									{
-										text: 'Открыть Тир Лист',
-										web_app: { url: config.webApp.url },
-									},
-								],
-							],
-						},
-					});
-
-					console.log(
-						`✅ Изображение успешно отправлено через файл, message_id: ${fileResult.message_id}`,
-					);
-				} finally {
-					// Удаляем временный файл
-					try {
-						await fs.promises.unlink(tempFilePath);
-						console.log(`🗑️ Временный файл удален: ${tempFilePath}`);
-					} catch (unlinkError) {
-						console.warn('⚠️ Не удалось удалить временный файл:', {
-							file: tempFilePath,
-							error:
-								unlinkError instanceof Error
-									? unlinkError.message
-									: String(unlinkError),
-						});
-					}
-				}
+				// Если бот не доступен в этом процессе, уведомляем пользователя
+				throw new Error('Сервис временно недоступен. Попробуйте позже.');
 			}
 
 			// Закрываем веб-приложение
@@ -294,7 +229,7 @@ export class ShareController {
 						clubId,
 					},
 					{
-						quality: 98, // Еще выше качество для аватарок
+						quality: 90, // Еще выше качество для аватарок
 						width: 550, // Оптимальная ширина для аватарок
 						height: 800, // Оптимальная высота
 						optimizeForSpeed: false, // Отключаем оптимизацию для лучшего качества
@@ -370,4 +305,4 @@ export class ShareController {
 	};
 }
 
-export const shareController = new ShareController();
+// ShareController будет создан в index.ts с передачей botService

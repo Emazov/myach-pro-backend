@@ -17,9 +17,14 @@ import {
 	requestTimer,
 	httpCache,
 	connectionOptimizer,
-	simpleRateLimit,
 	invalidateBrowserCache,
 } from './middleware/performance';
+import {
+	createRateLimit,
+	ddosProtection,
+	burstProtection,
+} from './middleware/advancedRateLimit';
+import { cacheService } from './services/cacheService';
 
 import authRoutes from './routes/auth';
 import clubsRoutes from './routes/clubs';
@@ -27,7 +32,7 @@ import playersRoutes from './routes/players';
 import adminRoutes from './routes/admin';
 import analyticsRoutes from './routes/analytics';
 import uploadRoutes from './routes/upload';
-import { shareRoutes } from './routes/share';
+import { createShareRoutes } from './routes/share';
 import healthRoutes from './routes/health';
 import { errorHandler } from './utils/errorHandler';
 
@@ -50,12 +55,16 @@ const initApp = () => {
 	app.use(httpCache);
 	app.use(invalidateBrowserCache);
 	app.use(simpleCompression);
-	app.use(simpleRateLimit(500, 60000)); // 500 запросов в минуту
+
+	// Многоуровневая защита от высоких нагрузок
+	app.use(ddosProtection.middleware()); // DDoS защита
+	app.use(burstProtection.middleware()); // Защита от всплесков
+	app.use(createRateLimit.general().middleware()); // Общий лимит
 
 	// Логируем CORS конфигурацию для отладки
 	logger.info(`CORS origins: ${JSON.stringify(config.cors.origins)}`, 'CORS');
 
-	// Настраиваем middleware ee 
+	// Настраиваем middleware ee
 	app.use(
 		cors({
 			origin: config.cors.origins,
@@ -85,6 +94,12 @@ const initApp = () => {
 	// Health check маршруты (без префикса /api для удобства мониторинга)
 	app.use('/health', healthRoutes);
 
+	// Инициализируем бота (только в master процессе кластера)
+	const botService = new TelegramBotService();
+
+	// Создаем share роуты с переданным ботом
+	const shareRoutes = createShareRoutes(botService);
+
 	// Подключаем маршруты API
 	app.use('/api/auth', authRoutes);
 	app.use('/api/clubs', clubsRoutes);
@@ -96,9 +111,6 @@ const initApp = () => {
 
 	// Подключаем обработчик ошибок
 	app.use(errorHandler);
-
-	// Инициализируем бота
-	const botService = new TelegramBotService();
 
 	// Запускаем периодическую задачу для очистки старых игровых сессий (каждые 30 минут)
 	const cleanupInterval = setInterval(async () => {
@@ -133,6 +145,7 @@ const initApp = () => {
 		clearInterval(cleanupInterval);
 		clearInterval(imageCacheCleanupInterval);
 		await imageGenerationService.cleanup();
+		await botService.shutdown(); // Корректное завершение бота
 		process.exit(0);
 	});
 
@@ -141,6 +154,7 @@ const initApp = () => {
 		clearInterval(cleanupInterval);
 		clearInterval(imageCacheCleanupInterval);
 		await imageGenerationService.cleanup();
+		await botService.shutdown(); // Корректное завершение бота
 		process.exit(0);
 	});
 
@@ -168,6 +182,13 @@ const initApp = () => {
 				'STARTUP',
 				error,
 			);
+		}
+
+		// Инициализируем систему кэширования
+		try {
+			logger.info('CacheService инициализирован');
+		} catch (error) {
+			logger.error('Ошибка при инициализации CacheService', 'STARTUP', error);
 		}
 	});
 
