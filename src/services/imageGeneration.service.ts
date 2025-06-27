@@ -514,7 +514,7 @@ export class ImageGenerationService {
 		.category-players {
 			display: grid;
 			grid-template-columns: repeat(6, minmax(0, 1fr));
-			gap: 8px; /* Увеличенный промежуток для 550px ширины */
+			gap: 5px; /* Увеличенный промежуток для 550px ширины */
 			flex: 1;
 			max-width: calc(100% - 120px);
 		}
