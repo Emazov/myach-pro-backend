@@ -95,7 +95,22 @@ export class SimpleBotMessagingService {
 			}
 
 			// Конвертируем base64 обратно в Buffer
-			const imageBuffer = Buffer.from(task.imageBuffer, 'base64');
+			let imageBuffer: Buffer;
+			try {
+				imageBuffer = Buffer.from(task.imageBuffer, 'base64');
+			} catch (conversionError) {
+				errorMessage = 'Ошибка конвертации base64 в Buffer';
+				logger.error(errorMessage, 'TELEGRAM_BOT', conversionError as Error);
+				return;
+			}
+
+			// Валидируем Buffer после конвертации
+			if (!this.validateImageBuffer(imageBuffer)) {
+				errorMessage = 'Buffer невалиден после конвертации из base64';
+				logger.error(errorMessage, 'TELEGRAM_BOT');
+				return;
+			}
+
 			const imageSizeMB = imageBuffer.length / (1024 * 1024);
 
 			logger.info(
@@ -151,6 +166,15 @@ export class SimpleBotMessagingService {
 		imageBuffer: Buffer,
 		caption: string,
 	): Promise<boolean> {
+		// Предварительная валидация Buffer
+		if (!this.validateImageBuffer(imageBuffer)) {
+			logger.error(
+				'❌ Получен невалидный Buffer изображения в SimpleBotMessagingService',
+				'TELEGRAM_BOT',
+			);
+			return false;
+		}
+
 		const isMasterProcess = process.env.pm_id === '0';
 
 		// Если мы в master процессе - отправляем напрямую
@@ -221,6 +245,72 @@ export class SimpleBotMessagingService {
 				error as Error,
 			);
 			logger.imageSent(false, chatId.toString());
+			return false;
+		}
+	}
+
+	/**
+	 * Валидирует Buffer изображения перед отправкой
+	 */
+	private validateImageBuffer(buffer: Buffer): boolean {
+		try {
+			// Проверяем что Buffer существует и не пустой
+			if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+				logger.error(
+					'❌ Buffer пустой, не определен или не является Buffer',
+					'TELEGRAM_BOT',
+				);
+				return false;
+			}
+
+			// Проверяем минимальный размер (1KB)
+			if (buffer.length < 1024) {
+				logger.error(
+					`❌ Buffer слишком маленький: ${buffer.length} байт`,
+					'TELEGRAM_BOT',
+				);
+				return false;
+			}
+
+			// Проверяем максимальный размер (20MB)
+			const sizeMB = buffer.length / (1024 * 1024);
+			if (sizeMB > 20) {
+				logger.error(
+					`❌ Buffer слишком большой: ${sizeMB.toFixed(2)}MB`,
+					'TELEGRAM_BOT',
+				);
+				return false;
+			}
+
+			// Проверяем JPEG заголовок
+			const jpegHeader = buffer.subarray(0, 3);
+			const isValidJPEG =
+				jpegHeader[0] === 0xff &&
+				jpegHeader[1] === 0xd8 &&
+				jpegHeader[2] === 0xff;
+
+			if (!isValidJPEG) {
+				logger.error(
+					`❌ Buffer не содержит JPEG заголовка: ${jpegHeader.toString('hex')}`,
+					'TELEGRAM_BOT',
+				);
+				return false;
+			}
+
+			logger.info(
+				`✅ Buffer изображения валиден: ${sizeMB.toFixed(
+					2,
+				)}MB, JPEG заголовок корректен`,
+				'TELEGRAM_BOT',
+			);
+
+			return true;
+		} catch (error) {
+			logger.error(
+				'❌ Ошибка при валидации Buffer:',
+				'TELEGRAM_BOT',
+				error as Error,
+			);
 			return false;
 		}
 	}

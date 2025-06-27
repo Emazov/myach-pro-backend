@@ -75,6 +75,39 @@ export class ShareController {
 			// Проверяем размер изображения
 			const imageSizeMB = imageBuffer.length / (1024 * 1024);
 
+			// Дополнительная валидация сгенерированного изображения
+			if (!imageBuffer || imageBuffer.length === 0) {
+				logger.error(
+					'Генерация изображения вернула пустой Buffer',
+					'IMAGE_GENERATION',
+				);
+				throw new Error('Не удалось сгенерировать изображение');
+			}
+
+			// Проверяем JPEG заголовок
+			const jpegHeader = imageBuffer.subarray(0, 3);
+			const isValidJPEG =
+				jpegHeader[0] === 0xff &&
+				jpegHeader[1] === 0xd8 &&
+				jpegHeader[2] === 0xff;
+
+			if (!isValidJPEG) {
+				logger.error(
+					`Сгенерированное изображение имеет неверный JPEG заголовок: ${jpegHeader.toString(
+						'hex',
+					)}`,
+					'IMAGE_GENERATION',
+				);
+				throw new Error('Сгенерированное изображение повреждено');
+			}
+
+			logger.info(
+				`✅ Изображение успешно сгенерировано: ${imageSizeMB.toFixed(
+					2,
+				)}MB, валидный JPEG, для клуба "${club.name}"`,
+				'IMAGE_GENERATION',
+			);
+
 			if (imageSizeMB > 10) {
 				logger.warn(
 					`Изображение слишком большое: ${imageSizeMB.toFixed(2)}MB`,

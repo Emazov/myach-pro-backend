@@ -177,9 +177,52 @@ if (!isMainThread && parentPort) {
 						},
 					});
 
+					// Валидация сгенерированного изображения
+					if (!screenshot || screenshot.length === 0) {
+						throw new Error('Скриншот пустой или не сгенерирован');
+					}
+
+					// Проверяем что это валидный JPEG
+					const jpegHeader = screenshot.subarray(0, 3);
+					const isValidJPEG =
+						jpegHeader[0] === 0xff &&
+						jpegHeader[1] === 0xd8 &&
+						jpegHeader[2] === 0xff;
+
+					if (!isValidJPEG) {
+						throw new Error(
+							`Сгенерированный файл не является валидным JPEG. Заголовок: ${jpegHeader.toString(
+								'hex',
+							)}`,
+						);
+					}
+
+					// Проверяем минимальный размер
+					if (screenshot.length < 1024) {
+						// Меньше 1KB подозрительно
+						throw new Error(
+							`Сгенерированное изображение слишком маленькое: ${screenshot.length} байт`,
+						);
+					}
+
+					const fileSizeMB = screenshot.length / (1024 * 1024);
+					if (fileSizeMB > 10) {
+						// Больше 10MB тоже подозрительно
+						throw new Error(
+							`Сгенерированное изображение слишком большое: ${fileSizeMB.toFixed(
+								2,
+							)}MB`,
+						);
+					}
+
 					parentPort!.postMessage({
 						success: true,
 						imageBuffer: screenshot,
+						stats: {
+							size: screenshot.length,
+							sizeMB: fileSizeMB,
+							isValidJPEG: true,
+						},
 					});
 				} finally {
 					await page.close();
@@ -228,11 +271,28 @@ export async function generateImageInWorker(
 
 		worker.on(
 			'message',
-			(result: { success: boolean; imageBuffer?: Buffer; error?: string }) => {
+			(result: {
+				success: boolean;
+				imageBuffer?: Buffer;
+				error?: string;
+				stats?: {
+					size: number;
+					sizeMB: number;
+					isValidJPEG: boolean;
+				};
+			}) => {
 				clearTimeout(timeout);
 				worker.terminate();
 
 				if (result.success && result.imageBuffer) {
+					// Логируем статистику генерации
+					if (result.stats) {
+						console.log(
+							`✅ Изображение сгенерировано: ${result.stats.sizeMB.toFixed(
+								2,
+							)}MB, валидный JPEG: ${result.stats.isValidJPEG}`,
+						);
+					}
 					resolve(result.imageBuffer);
 				} else {
 					reject(new Error(result.error || 'Worker failed'));

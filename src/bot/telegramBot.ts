@@ -181,10 +181,40 @@ export class TelegramBotService {
 			return false;
 		}
 
+		// Валидация Buffer изображения
+		if (!imageBuffer || imageBuffer.length === 0) {
+			logger.error(
+				'❌ Buffer изображения пустой или не определен',
+				'TELEGRAM_BOT',
+			);
+			return false;
+		}
+
+		// Проверяем что Buffer содержит валидные JPEG данные
+		const isValidJPEG = this.validateJPEGBuffer(imageBuffer);
+		if (!isValidJPEG) {
+			logger.error(
+				'❌ Buffer не содержит валидных JPEG данных, принудительно используем файловый метод',
+				'TELEGRAM_BOT',
+			);
+
+			// Сразу пробуем файловый метод при невалидном Buffer
+			try {
+				return await this.sendImageViaFile(chatId, imageBuffer, caption);
+			} catch (fileError) {
+				logger.error(
+					'❌ Файловый метод также не сработал:',
+					'TELEGRAM_BOT',
+					fileError,
+				);
+				return false;
+			}
+		}
+
 		// Проверяем размер изображения
 		const imageSizeMB = imageBuffer.length / (1024 * 1024);
 		logger.info(
-			`📷 Попытка отправки изображения: ${imageSizeMB.toFixed(
+			`📷 Попытка отправки валидного изображения: ${imageSizeMB.toFixed(
 				2,
 			)}MB для пользователя ${chatId}`,
 			'TELEGRAM_BOT',
@@ -261,10 +291,14 @@ export class TelegramBotService {
 					error,
 				);
 
-				// Если это переполнение стека, пробуем альтернативный метод
-				if (errorMessage.includes('Maximum call stack size exceeded')) {
+				// Если это ошибка с Buffer file-type или переполнение стека, пробуем альтернативный метод
+				if (
+					errorMessage.includes('Maximum call stack size exceeded') ||
+					errorMessage.includes('Unsupported Buffer file-type') ||
+					errorMessage.includes('EFATAL')
+				) {
 					logger.warn(
-						`🔄 Обнаружено переполнение стека, пробуем отправку через файл`,
+						`🔄 Обнаружена ошибка Buffer/стека, пробуем отправку через файл`,
 						'TELEGRAM_BOT',
 					);
 
@@ -276,7 +310,7 @@ export class TelegramBotService {
 						);
 						if (fileResult) {
 							logger.info(
-								`✅ Изображение успешно отправлено через файл после ошибки стека`,
+								`✅ Изображение успешно отправлено через файл после ошибки Buffer`,
 								'TELEGRAM_BOT',
 							);
 							return true;
@@ -313,6 +347,54 @@ export class TelegramBotService {
 	}
 
 	/**
+	 * Валидирует что Buffer содержит корректные JPEG данные
+	 */
+	private validateJPEGBuffer(buffer: Buffer): boolean {
+		try {
+			if (!buffer || buffer.length < 10) {
+				return false;
+			}
+
+			// Проверяем JPEG заголовок (FF D8 FF)
+			const jpegHeader = buffer.subarray(0, 3);
+			const isJPEG =
+				jpegHeader[0] === 0xff &&
+				jpegHeader[1] === 0xd8 &&
+				jpegHeader[2] === 0xff;
+
+			if (!isJPEG) {
+				logger.error(
+					`❌ Buffer не содержит JPEG заголовка: ${jpegHeader.toString('hex')}`,
+					'TELEGRAM_BOT',
+				);
+				return false;
+			}
+
+			// Проверяем JPEG окончание (FF D9)
+			const jpegFooter = buffer.subarray(-2);
+			const hasValidEnd = jpegFooter[0] === 0xff && jpegFooter[1] === 0xd9;
+
+			if (!hasValidEnd) {
+				logger.warn(
+					`⚠️ Buffer не имеет корректного JPEG окончания, но имеет заголовок`,
+					'TELEGRAM_BOT',
+				);
+				// Возвращаем true, так как основной заголовок есть
+				return true;
+			}
+
+			return true;
+		} catch (error) {
+			logger.error(
+				'❌ Ошибка при валидации JPEG Buffer:',
+				'TELEGRAM_BOT',
+				error as Error,
+			);
+			return false;
+		}
+	}
+
+	/**
 	 * Альтернативный метод отправки изображения через временный файл
 	 * Используется как fallback при проблемах с Buffer
 	 */
@@ -335,6 +417,28 @@ export class TelegramBotService {
 
 			// Записываем изображение во временный файл
 			fs.writeFileSync(tempFilePath, imageBuffer);
+
+			// Проверяем что файл записался корректно
+			if (!fs.existsSync(tempFilePath)) {
+				throw new Error('Временный файл не был создан');
+			}
+
+			const fileStats = fs.statSync(tempFilePath);
+			if (fileStats.size === 0) {
+				throw new Error('Временный файл пустой');
+			}
+
+			if (fileStats.size !== imageBuffer.length) {
+				logger.warn(
+					`⚠️ Размер записанного файла (${fileStats.size}) не совпадает с размером Buffer (${imageBuffer.length})`,
+					'TELEGRAM_BOT',
+				);
+			}
+
+			logger.info(
+				`💾 Временный файл создан: ${tempFilePath} (${fileStats.size} байт)`,
+				'TELEGRAM_BOT',
+			);
 
 			if (!this.bot) {
 				throw new Error('Бот недоступен');
