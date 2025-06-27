@@ -28,8 +28,15 @@ export class ShareController {
 		let userId: number | undefined; // Определяем в начале для доступа в catch
 
 		try {
-			const { shareData } = req.body;
-			const user = (req as any).user; // Данные пользователя из middleware
+			const { shareData, telegramUser } = req.body; // telegramUser из middleware
+
+			// Детальное логирование для диагностики
+			console.log('🔍 Диагностика shareResults:');
+			console.log('📦 shareData присутствует:', !!shareData);
+			console.log('👤 telegramUser из middleware:', telegramUser);
+			console.log('🆔 telegramUser.id:', telegramUser?.id);
+			console.log('📋 Headers Authorization:', req.headers.authorization);
+			console.log('📋 req.body keys:', Object.keys(req.body));
 
 			if (!shareData) {
 				res.status(400).json({
@@ -38,14 +45,25 @@ export class ShareController {
 				return;
 			}
 
-			if (!user || !user.id) {
+			if (!telegramUser || !telegramUser.id) {
+				console.error('❌ Ошибка: пользователь не найден в middleware');
+				console.error('📋 Полные заголовки:', req.headers);
+				console.error('👤 Объект telegramUser:', telegramUser);
+				console.error('📦 req.body:', req.body);
+
 				res.status(400).json({
 					error: 'Не удалось получить ID пользователя',
+					debug: {
+						hasTelegramUser: !!telegramUser,
+						userId: telegramUser?.id,
+						hasAuthHeader: !!req.headers.authorization,
+						bodyKeys: Object.keys(req.body),
+					},
 				});
 				return;
 			}
 
-			userId = user.id;
+			userId = telegramUser.id;
 
 			// Подготавливаем данные для генерации изображения
 			const imageData: ShareImageData = {
