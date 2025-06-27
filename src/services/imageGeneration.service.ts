@@ -592,11 +592,11 @@ export class ImageGenerationService {
 		options: ImageQualityOptions = {},
 	): Promise<{ imageBuffer: Buffer; club: { name: string } }> {
 		try {
-			// Устанавливаем значения по умолчанию
+			// Устанавливаем значения по умолчанию (оптимизированные размеры)
 			const defaultOptions: Required<ImageQualityOptions> = {
 				quality: 85,
-				width: 600,
-				height: 800,
+				width: 600, // Компактный размер по умолчанию
+				height: 800, // Оптимальное соотношение сторон
 				optimizeForSpeed: true,
 			};
 
