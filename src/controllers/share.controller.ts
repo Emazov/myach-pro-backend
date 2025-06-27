@@ -225,7 +225,7 @@ export class ShareController {
 					categories,
 					clubId,
 				},
-				{ quality: 75, width: 500, height: 800 }, // Сжатое качество для превью
+				{ quality: 75, width: 550, height: 800 }, // Сжатое качество для превью
 			);
 
 			res.set({
@@ -273,7 +273,7 @@ export class ShareController {
 					},
 					{
 						quality: 98, // Еще выше качество для аватарок
-						width: 500, // Компактная ширина
+						width: 550, // Оптимальная ширина для аватарок
 						height: 800, // Оптимальная высота
 						optimizeForSpeed: false, // Отключаем оптимизацию для лучшего качества
 					},

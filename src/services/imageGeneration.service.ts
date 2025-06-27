@@ -15,7 +15,7 @@ export interface ShareImageData {
 // Настройки качества изображения
 export interface ImageQualityOptions {
 	quality?: number; // 1-100, по умолчанию 85
-	width?: number; // ширина в пикселях, по умолчанию 500
+	width?: number; // ширина в пикселях, по умолчанию 550
 	height?: number; // высота в пикселях, по умолчанию 800
 	optimizeForSpeed?: boolean; // оптимизация для скорости, по умолчанию true
 }
@@ -514,14 +514,26 @@ export class ImageGenerationService {
 		.category-players {
 			display: grid;
 			grid-template-columns: repeat(6, minmax(0, 1fr));
-			gap: 6px;
+			gap: 8px; /* Увеличенный промежуток для 550px ширины */
 			flex: 1;
 			max-width: calc(100% - 120px);
 		}
 
 		.player-avatar {
-			width: ${options.width && options.width >= 500 ? '50px' : '45px'};
-			height: ${options.width && options.width >= 500 ? '65px' : '60px'};
+			width: ${
+				options.width && options.width >= 550
+					? '55px'
+					: options.width && options.width >= 500
+					? '50px'
+					: '45px'
+			};
+			height: ${
+				options.width && options.width >= 550
+					? '70px'
+					: options.width && options.width >= 500
+					? '65px'
+					: '60px'
+			};
 			border-radius: 8px;
 			object-fit: cover;
 			border: 2px solid rgba(255, 255, 255, 0.8);
@@ -597,7 +609,7 @@ export class ImageGenerationService {
 			// Устанавливаем значения по умолчанию (оптимизированные размеры)
 			const defaultOptions: Required<ImageQualityOptions> = {
 				quality: 85,
-				width: 500, // Компактный размер по умолчанию
+				width: 550, // Оптимальный размер для аватарок
 				height: 800, // Оптимальное соотношение сторон
 				optimizeForSpeed: true,
 			};

@@ -204,7 +204,7 @@ if (!isMainThread && parentPort) {
  */
 export async function generateImageInWorker(
 	html: string,
-	viewportWidth: number = 500,
+	viewportWidth: number = 550,
 	viewportHeight: number = 800,
 	quality: number = 85,
 	optimizeForSpeed: boolean = true,
