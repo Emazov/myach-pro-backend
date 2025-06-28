@@ -127,7 +127,7 @@ export class TelegramBotService {
 	private async sendWebAppButton(chatId: number) {
 		if (!this.bot) {
 			logger.warn(
-				'⚠️ Попытка отправить сообщение, но бот не инициализирован',
+				'⚠️ Попытка отправить сообщение, но бот не инициализирован!',
 				'TELEGRAM_BOT',
 			);
 			return;
