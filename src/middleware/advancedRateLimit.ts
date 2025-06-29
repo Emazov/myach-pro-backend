@@ -130,10 +130,10 @@ export const createRateLimit = {
 	 */
 	imageGeneration: () =>
 		new AdvancedRateLimit({
-			windowMs: 5 * 60 * 1000, // 5 минут
-			maxRequests: 10, // 10 изображений в 5 минут
+			windowMs: 2 * 60 * 1000, // 2 минуты (сократили с 5)
+			maxRequests: 20, // 20 изображений в 2 минуты (вместо 10 в 5 минут)
 			message:
-				'Превышен лимит генерации изображений. Попробуйте через 5 минут.',
+				'Превышен лимит генерации изображений. Попробуйте через 2 минуты.',
 			keyGenerator: (req: Request) => {
 				// Для аутентифицированных пользователей используем user ID
 				const userId = (req as any).telegramUser?.id;

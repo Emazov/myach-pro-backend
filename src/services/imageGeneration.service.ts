@@ -2,6 +2,7 @@ import { config } from '../config/env';
 import { prisma } from '../prisma';
 import { StorageService } from './storage.service';
 import { generateImageInWorker } from '../workers/imageWorker';
+import { puppeteerPoolService } from './puppeteerPool.service';
 import { logger } from '../utils/logger';
 import fs from 'fs';
 import path from 'path';
@@ -654,16 +655,16 @@ export class ImageGenerationService {
 			// Генерируем HTML
 			const html = await this.generateHTML(data, finalOptions);
 
-			// Генерируем изображение в отдельном Worker потоке
+			// Генерируем изображение через оптимизированный пул браузеров
 			const startTime = Date.now();
 
-			const imageBuffer = await generateImageInWorker(
+			const imageBuffer = await puppeteerPoolService.generateImage({
 				html,
-				finalOptions.width,
-				finalOptions.height,
-				finalOptions.quality,
-				finalOptions.optimizeForSpeed,
-			);
+				viewportWidth: finalOptions.width,
+				viewportHeight: finalOptions.height,
+				quality: finalOptions.quality,
+				optimizeForSpeed: finalOptions.optimizeForSpeed,
+			});
 
 			const duration = Date.now() - startTime;
 

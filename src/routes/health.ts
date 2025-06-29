@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { redisService } from '../services/redis.service';
 import { prisma } from '../prisma';
 import { logger } from '../utils/logger';
+import { puppeteerPoolService } from '../services/puppeteerPool.service';
 
 const router = Router();
 
@@ -77,6 +78,61 @@ router.get('/ready', async (req: Request, res: Response) => {
 			status: 'not_ready',
 			timestamp: new Date().toISOString(),
 			error: 'Service dependencies are not available',
+		});
+	}
+});
+
+router.get('/detailed', async (req: Request, res: Response) => {
+	try {
+		const checks = {
+			database: false,
+			redis: false,
+			puppeteerPool: false,
+		};
+
+		// Проверяем соединение с базой данных
+		try {
+			await prisma.$queryRaw`SELECT 1`;
+			checks.database = true;
+		} catch (error) {
+			logger.error('Health check - Database failed:', 'HEALTH', error);
+			checks.database = false;
+		}
+
+		// Проверяем соединение с Redis
+		try {
+			await redisService.get('health-check');
+			checks.redis = true;
+		} catch (error) {
+			logger.error('Health check - Redis failed:', 'HEALTH', error);
+			checks.redis = false;
+		}
+
+		// Проверка пула браузеров Puppeteer
+		try {
+			const metrics = puppeteerPoolService.getMetrics();
+			checks.puppeteerPool =
+				metrics.totalBrowsers > 0 || metrics.queueSize < 50; // Здоров если есть браузеры или очередь не переполнена
+		} catch (error) {
+			logger.error('Health check - Puppeteer pool failed:', 'HEALTH', error);
+			checks.puppeteerPool = false;
+		}
+
+		const allHealthy = Object.values(checks).every(Boolean);
+
+		res.status(allHealthy ? 200 : 503).json({
+			status: allHealthy ? 'healthy' : 'unhealthy',
+			checks,
+			timestamp: new Date().toISOString(),
+			uptime: process.uptime(),
+			puppeteerMetrics: puppeteerPoolService.getMetrics(),
+		});
+	} catch (error) {
+		logger.error('Health check failed:', 'HEALTH', error);
+		res.status(503).json({
+			status: 'unhealthy',
+			error: 'Health check failed',
+			timestamp: new Date().toISOString(),
 		});
 	}
 });

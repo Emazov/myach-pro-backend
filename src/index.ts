@@ -9,6 +9,7 @@ import { redisService } from './services/redis.service';
 import { AnalyticsService } from './services/analytics.service';
 import { AdminService } from './services/admin.service';
 import { imageGenerationService } from './services/imageGeneration.service';
+import { puppeteerPoolService } from './services/puppeteerPool.service';
 import { logger } from './utils/logger';
 
 // Импортируем middleware производительности и сжатия
@@ -143,24 +144,38 @@ const initApp = () => {
 		}
 	}, 2 * 60 * 60 * 1000); // 2 часа
 
-	// Очищаем интервалы при выключении приложения
-	process.on('SIGINT', async () => {
-		logger.shutdown('Получен сигнал SIGINT, завершение работы...');
-		clearInterval(cleanupInterval);
-		clearInterval(imageCacheCleanupInterval);
-		await imageGenerationService.cleanup();
-		await botService.shutdown(); // Корректное завершение бота
-		process.exit(0);
-	});
+	// Graceful shutdown
+	const gracefulShutdown = async (signal: string) => {
+		logger.shutdown(`Получен сигнал ${signal}, завершение работы...`);
 
-	process.on('SIGTERM', async () => {
-		logger.shutdown('Получен сигнал SIGTERM, завершение работы...');
-		clearInterval(cleanupInterval);
-		clearInterval(imageCacheCleanupInterval);
-		await imageGenerationService.cleanup();
-		await botService.shutdown(); // Корректное завершение бота
-		process.exit(0);
-	});
+		try {
+			// Останавливаем интервалы
+			clearInterval(cleanupInterval);
+			clearInterval(imageCacheCleanupInterval);
+
+			// Завершаем пул браузеров
+			await puppeteerPoolService.shutdown();
+			logger.info('✅ Пул браузеров завершен', 'SHUTDOWN');
+
+			// Очищаем кэш изображений
+			await imageGenerationService.cleanup();
+			logger.info('✅ Кэш изображений очищен', 'SHUTDOWN');
+
+			// Завершаем бота
+			await botService.shutdown();
+			logger.info('✅ Telegram бот завершен', 'SHUTDOWN');
+
+			logger.info('✅ Сервер завершил работу', 'SHUTDOWN');
+			process.exit(0);
+		} catch (error) {
+			logger.error('❌ Ошибка при завершении работы:', 'SHUTDOWN', error);
+			process.exit(1);
+		}
+	};
+
+	// Очищаем интервалы при выключении приложения
+	process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+	process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 	// Запускаем сервер
 	app.listen(config.port, async () => {
@@ -174,6 +189,18 @@ const initApp = () => {
 			await AdminService.checkAndResetAdminsOnMainAdminChange();
 		} catch (error) {
 			logger.error('Ошибка при проверке главного админа', 'STARTUP', error);
+		}
+
+		// Инициализируем пул браузеров Puppeteer
+		try {
+			await puppeteerPoolService.initialize();
+			logger.info('PuppeteerPoolService инициализирован');
+		} catch (error) {
+			logger.error(
+				'Ошибка при инициализации PuppeteerPoolService',
+				'STARTUP',
+				error,
+			);
 		}
 
 		// Инициализируем ресурсы для генерации изображений

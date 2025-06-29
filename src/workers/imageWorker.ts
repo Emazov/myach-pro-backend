@@ -115,7 +115,7 @@ if (!isMainThread && parentPort) {
 					if (optimizeForSpeed) {
 						// Отключаем ненужные ресурсы, НО разрешаем изображения
 						await page.setRequestInterception(true);
-						page.on('request', (req) => {
+						page.on('request', (req: any) => {
 							const resourceType = req.resourceType();
 							const url = req.url();
 

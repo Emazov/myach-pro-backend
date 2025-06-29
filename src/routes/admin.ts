@@ -1,5 +1,5 @@
-import { Router } from 'express';
-import { initDataAuth } from '../middleware/validateInitData';
+import { Router, Request, Response } from 'express';
+import { initDataAuth, validateInitData } from '../middleware/validateInitData';
 import { checkAdminRole } from '../middleware/checkAdminRole';
 import {
 	getAdmins,
@@ -11,6 +11,8 @@ import {
 	clearAnalyticsCache,
 	clearAllCache,
 } from '../controllers/admin.controller';
+import { userImageRateLimit } from '../middleware/userRateLimit';
+import { puppeteerPoolService } from '../services/puppeteerPool.service';
 
 const router = Router();
 
@@ -42,5 +44,85 @@ router.delete('/cache/analytics', clearAnalyticsCache);
 
 // DELETE /api/admin/cache/all - очистить весь кеш
 router.delete('/cache/all', clearAllCache);
+
+/**
+ * POST /admin/reset-user-limits/:userId
+ * Сброс лимитов генерации изображений для пользователя
+ */
+router.post(
+	'/reset-user-limits/:userId',
+	async (req: Request, res: Response): Promise<any> => {
+		try {
+			const { userId } = req.params;
+
+			if (!userId) {
+				return res.status(400).json({ error: 'Не указан ID пользователя' });
+			}
+
+			await userImageRateLimit.resetUserLimits(userId);
+
+			res.json({
+				success: true,
+				message: `Лимиты пользователя ${userId} сброшены`,
+			});
+		} catch (error) {
+			console.error('Ошибка сброса лимитов пользователя:', error);
+			res.status(500).json({ error: 'Ошибка сброса лимитов' });
+		}
+	},
+);
+
+/**
+ * GET /admin/user-stats/:userId
+ * Получение статистики лимитов пользователя (для админов)
+ */
+router.get(
+	'/user-stats/:userId',
+	initDataAuth,
+	checkAdminRole,
+	async (req: Request, res: Response): Promise<any> => {
+		try {
+			const { userId } = req.params;
+
+			if (!userId) {
+				return res.status(400).json({ error: 'Не указан ID пользователя' });
+			}
+
+			const stats = await userImageRateLimit.getUserStats(userId);
+
+			res.json({
+				userId,
+				stats,
+			});
+		} catch (error) {
+			console.error('Ошибка получения статистики пользователя:', error);
+			res.status(500).json({ error: 'Ошибка получения статистики' });
+		}
+	},
+);
+
+/**
+ * GET /admin/puppeteer-metrics
+ * Получение метрик пула браузеров Puppeteer
+ */
+router.get(
+	'/puppeteer-metrics',
+	initDataAuth,
+	checkAdminRole,
+	async (req: Request, res: Response): Promise<void> => {
+		try {
+			const metrics = puppeteerPoolService.getMetrics();
+
+			res.json({
+				success: true,
+				metrics,
+				timestamp: new Date().toISOString(),
+			});
+		} catch (error) {
+			console.error('Ошибка получения метрик Puppeteer:', error);
+			res.status(500).json({ error: 'Ошибка получения метрик' });
+		}
+	},
+);
 
 export default router;
