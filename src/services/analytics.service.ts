@@ -5,17 +5,21 @@ export enum EventType {
 	APP_START = 'app_start',
 	GAME_START = 'game_start',
 	GAME_COMPLETED = 'game_completed',
+	IMAGE_SHARED = 'image_shared',
 }
 
 export interface AnalyticsStats {
 	totalUsers: number;
 	totalAppStarts: number; // Общее количество запусков игр (GAME_START)
 	totalGameCompletions: number;
+	totalImageShares: number; // Общее количество поделенных картинок
 	conversionRate: number;
+	shareRate: number; // Процент пользователей, поделивших картинкой
 	recentStats: {
 		usersToday: number;
 		appStartsToday: number; // Запуски игр за сегодня (GAME_START)
 		gameCompletionsToday: number;
+		imageSharesToday: number; // Количество поделенных картинок за сегодня
 	};
 }
 
@@ -287,9 +291,26 @@ export class AnalyticsService {
 				},
 			});
 
+			// Общее количество поделенных картинок (от обычных пользователей)
+			const totalImageShares = await prisma.userEvent.count({
+				where: {
+					eventType: EventType.IMAGE_SHARED,
+					// Исключаем админов через join с таблицей users
+					User: {
+						role: 'user',
+					},
+				},
+			});
+
 			// Конверсия
 			const conversionRate =
 				totalAppStarts > 0 ? (totalGameCompletions / totalAppStarts) * 100 : 0;
+
+			// Процент пользователей, поделивших картинкой
+			const shareRate =
+				totalGameCompletions > 0
+					? (totalImageShares / totalGameCompletions) * 100
+					: 0;
 
 			// Статистика за сегодня
 			const todayStart = new Date();
@@ -333,16 +354,32 @@ export class AnalyticsService {
 				},
 			});
 
+			const imageSharesToday = await prisma.userEvent.count({
+				where: {
+					eventType: EventType.IMAGE_SHARED,
+					User: {
+						role: 'user',
+					},
+					createdAt: {
+						gte: todayStart,
+						lte: todayEnd,
+					},
+				},
+			});
+
 			// Преобразуем все BigInt значения в Number
 			const result = {
 				totalUsers,
 				totalAppStarts,
 				totalGameCompletions,
+				totalImageShares,
 				conversionRate: Math.round(conversionRate * 100) / 100,
+				shareRate: Math.round(shareRate * 100) / 100,
 				recentStats: {
 					usersToday,
 					appStartsToday,
 					gameCompletionsToday,
+					imageSharesToday,
 				},
 			};
 
@@ -367,7 +404,8 @@ export class AnalyticsService {
 				SELECT 
 					DATE(ue.created_at) as date,
 					COUNT(CASE WHEN ue.event_type = 'game_start' THEN 1 END) as app_starts,
-					COUNT(CASE WHEN ue.event_type = 'game_completed' THEN 1 END) as game_completions
+					COUNT(CASE WHEN ue.event_type = 'game_completed' THEN 1 END) as game_completions,
+					COUNT(CASE WHEN ue.event_type = 'image_shared' THEN 1 END) as image_shares
 				FROM user_events ue
 				INNER JOIN users u ON ue.telegram_id = u.telegram_id
 				WHERE ue.created_at >= ${startDate} 

@@ -12,6 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import { logger } from '../utils/logger';
 import { testBufferConversion, diagnoseBuffer } from '../utils/bufferTest';
+import { AnalyticsService, EventType } from '../services/analytics.service';
 
 /**
  * Контроллер для обработки функций шаринга
@@ -266,6 +267,16 @@ export class ShareController {
 
 				// Логируем успешную отправку
 				logger.imageSent(true, userId.toString(), validImageBuffer.length);
+
+				// Логируем событие поделиться картинкой в аналитику
+				await AnalyticsService.logEvent(
+					userId.toString(),
+					EventType.IMAGE_SHARED,
+					{
+						clubName: club.name,
+						imageSize: validImageBuffer.length,
+					},
+				);
 			} catch (sendError) {
 				// Логируем ошибку отправки
 				logger.imageSent(false, userId?.toString());
